@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "MyNewProject",
+    "slug": "MyNewProject",
+    "version": "1.0.0",
+    "scheme": "healthdash",
+    "android": {
+      "package": "com.hpsin.healthdash",
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_HEART_RATE",
+        "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
+      ]
+    },
+    "plugins": [
+      "expo-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
+    ]
+  }
+}
