@@ -1,25 +1,51 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { MD3DarkTheme, MD3LightTheme, PaperProvider } from 'react-native-paper';
+import { MD3DarkTheme, PaperProvider } from 'react-native-paper';
 import 'react-native-reanimated';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
+// Create a custom Material 3 Dark Theme based on our requirements
+const customDarkTheme = {
+    ...MD3DarkTheme,
+    colors: {
+        ...MD3DarkTheme.colors,
+        primary: '#D0BCFF',
+        onPrimary: '#381E72',
+        primaryContainer: '#4F378B',
+        onPrimaryContainer: '#EADDFF',
+        secondary: '#CCC2DC',
+        onSecondary: '#332D41',
+        secondaryContainer: '#4A4458',
+        onSecondaryContainer: '#E8DEF8',
+        background: '#141218',
+        onBackground: '#E6E1E5',
+        surface: '#141218',
+        onSurface: '#E6E1E5',
+        surfaceVariant: '#49454F',
+        onSurfaceVariant: '#CAC4D0',
+        outline: '#938F99',
+        outlineVariant: '#49454F',
+    }
+};
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-
-  // Combine React Navigation Theme with React Native Paper Theme
-  const paperTheme = colorScheme === 'dark' ? MD3DarkTheme : MD3LightTheme;
-
   return (
-    <PaperProvider theme={paperTheme}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="index" />
-        </Stack>
-        <StatusBar style="auto" />
-      </ThemeProvider>
+    <PaperProvider theme={customDarkTheme}>
+      <Stack screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: customDarkTheme.colors.background }
+      }}>
+        {/* Mount the (tabs) interface as the root */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        
+        {/* Metric Detail Screen pushed on top of tabs */}
+        <Stack.Screen 
+            name="metric/[id]" 
+            options={{ 
+                headerShown: false,
+                presentation: 'card', 
+                animation: 'slide_from_right'
+            }} 
+        />
+      </Stack>
     </PaperProvider>
   );
 }
