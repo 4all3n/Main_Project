@@ -13,6 +13,7 @@ export default function JournalStackLayout() {
         >
             <Stack.Screen name="index" />
             <Stack.Screen name="create" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="[date]" />
         </Stack>
     );
 }

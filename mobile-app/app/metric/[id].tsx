@@ -1,4 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -6,11 +8,15 @@ import { BarChart } from 'react-native-gifted-charts';
 import { aggregateRecord, readRecords } from 'react-native-health-connect';
 import { ActivityIndicator, Card, Divider, IconButton, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAppTheme } from '../../providers/app-theme-provider';
+import { ZEN_PALETTE } from '../../constants/zen-ui';
 
 export default function MetricDetailScreen() {
     const { id, payload } = useLocalSearchParams();
     const router = useRouter();
     const theme = useTheme();
+    const { isDark } = useAppTheme();
+    const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
     const insets = useSafeAreaInsets();
 
     const [historicalData, setHistoricalData] = useState<{value: number, label: string}[]>([]);
@@ -21,7 +27,7 @@ export default function MetricDetailScreen() {
     let data : any;
     try {
         data = payload ? JSON.parse(payload as string) : null;
-    } catch (e) {
+    } catch {
         data = null;
     }
 
@@ -95,7 +101,7 @@ export default function MetricDetailScreen() {
         };
 
         fetchHistory();
-    }, [id, payload]);
+    }, [id, payload, color]);
 
     if (!data) {
         return (
@@ -112,6 +118,12 @@ export default function MetricDetailScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <LinearGradient
+                colors={[palette.glowA, palette.glowB, 'rgba(0,0,0,0)']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+            />
             {/* Top App Bar */}
             <View style={[styles.appBar, { paddingTop: insets.top + 10 }]}>
                 <IconButton 
@@ -130,7 +142,9 @@ export default function MetricDetailScreen() {
             <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                 
                 {/* Hero Section */}
-                <Surface style={[styles.heroCard, { backgroundColor: theme.colors.surface }]} elevation={2}>
+                <Surface style={[styles.heroCard, { borderColor: palette.glassBorder }]} elevation={2}>
+                    <BlurView intensity={isDark ? 24 : 50} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
                     <Surface style={[styles.iconSurface, { backgroundColor: theme.colors.elevation.level3 }]} elevation={0}>
                         <Ionicons name={icon} size={42} color={color} />
                     </Surface>
@@ -170,6 +184,7 @@ export default function MetricDetailScreen() {
                      </View>
                 ) : (
                     <Card mode="contained" style={[styles.chartContainer, { backgroundColor: theme.colors.surfaceVariant, paddingLeft: 0 }]}>
+                        <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
                         <Card.Content style={{ paddingRight: 0, paddingLeft: 0, paddingBottom: 0 }}>
                             <BarChart
                                 data={historicalData}
@@ -201,7 +216,9 @@ export default function MetricDetailScreen() {
                     </Card>
                 )}
 
-                <Card mode="contained" style={[styles.insightCard, { backgroundColor: theme.colors.surfaceVariant, marginTop: 16 }]}>
+                <Card mode="contained" style={[styles.insightCard, { marginTop: 16, borderColor: palette.glassBorder }]}>
+                    <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
                     <Card.Content>
                         <View style={styles.insightHeader}>
                             <Ionicons name="calendar-outline" size={20} color={theme.colors.primary} />
@@ -244,6 +261,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20,
         borderRadius: 32,
         marginTop: 10,
+        borderWidth: 1,
+        backgroundColor: 'transparent',
+        overflow: 'hidden',
     },
     iconSurface: {
         width: 80,
@@ -258,6 +278,9 @@ const styles = StyleSheet.create({
     },
     insightCard: {
         borderRadius: 24,
+        borderWidth: 1,
+        backgroundColor: 'transparent',
+        overflow: 'hidden',
     },
     insightHeader: {
         flexDirection: 'row',
@@ -267,6 +290,8 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         paddingVertical: 20,
         minHeight: 220,
-        overflow: 'hidden'
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.08)',
     }
 });
