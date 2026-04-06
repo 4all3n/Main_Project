@@ -1,2 +1,5 @@
 backend/Data
 backend/.venv
+backend/saved_models
+backend/__pycache__
+backend/output_graphs

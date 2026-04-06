@@ -1,3 +1,10 @@
 pandas
 scikit-learn
 nltk
+matplotlib
+seaborn
+imbalanced-learn
+fastapi
+uvicorn
+pydantic
+joblib
