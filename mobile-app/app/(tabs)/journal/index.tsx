@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
@@ -10,26 +9,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../providers/app-theme-provider';
 import { ZEN_PALETTE } from '../../../constants/zen-ui';
 import { MovingZenBackground } from '../../../components/moving-zen-background';
+import { readJournalEntries, writeJournalEntries } from '../../../lib/journal-storage';
 
-// We pull from the same storage key as the editor
-const JOURNAL_STORAGE_KEY = '@journal_entries';
-
-type JournalEntryValue = string | { title?: string; content?: string };
-type JournalEntry = { date: string; title: string; content: string };
-
-function normalizeEntry(value: JournalEntryValue | undefined, fallbackDate: string) {
-    if (typeof value === 'string') {
-        return {
-            title: `Reflection on ${fallbackDate}`,
-            content: value,
-        };
-    }
-
-    return {
-        title: value?.title?.trim() || `Reflection on ${fallbackDate}`,
-        content: value?.content || '',
-    };
-}
+type JournalEntry = { id: string; date: string; title?: string; content: string; createdAt: string; updatedAt: string };
 
 export default function JournalListScreen() {
     const theme = useTheme();
@@ -45,20 +27,9 @@ export default function JournalListScreen() {
     const loadEntries = async () => {
         setRefreshing(true);
         try {
-            const storedEntries = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY);
-            if (storedEntries) {
-                const parsed = JSON.parse(storedEntries);
-                // Convert mapping { "YYYY-MM-DD": "content" } to sorted array array
-                const entriesArray = Object.keys(parsed).map(dateKey => ({
-                    date: dateKey,
-                    ...normalizeEntry(parsed[dateKey] as JournalEntryValue, dateKey),
-                }));
-                // Sort descending (newest first)
-                entriesArray.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                setEntries(entriesArray);
-            } else {
-                setEntries([]);
-            }
+            const entriesArray = await readJournalEntries();
+            entriesArray.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
+            setEntries(entriesArray);
         } catch (error) {
             console.error('Failed to load journal entries:', error);
         } finally {
@@ -73,15 +44,15 @@ export default function JournalListScreen() {
         }, [])
     );
 
-    const openEntry = (date: string) => {
-        router.push({ pathname: '/(tabs)/journal/[date]', params: { date } });
+    const openEntry = (id: string) => {
+        router.push({ pathname: '/(tabs)/journal/[date]', params: { date: id } });
     };
 
-    const editEntry = (date: string) => {
-        router.push({ pathname: '/(tabs)/journal/create', params: { date } });
+    const editEntry = (id: string) => {
+        router.push({ pathname: '/(tabs)/journal/create', params: { date: id } });
     };
 
-    const deleteEntry = (date: string) => {
+    const deleteEntry = (id: string) => {
         Alert.alert('Delete journal entry?', 'This will remove the entry for this date.', [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -89,11 +60,10 @@ export default function JournalListScreen() {
                 style: 'destructive',
                 onPress: async () => {
                     try {
-                        const storedEntries = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY);
-                        const parsed = storedEntries ? JSON.parse(storedEntries) : {};
-                        delete parsed[date];
-                        await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(parsed));
-                        setEntries((current) => current.filter((entry) => entry.date !== date));
+                        const currentEntries = await readJournalEntries();
+                        const nextEntries = currentEntries.filter((entry) => entry.id !== id);
+                        await writeJournalEntries(nextEntries);
+                        setEntries(nextEntries);
                     } catch (error) {
                         console.error('Failed to delete journal entry:', error);
                     }
@@ -114,7 +84,7 @@ export default function JournalListScreen() {
         const preview = item.content.length > 120 ? `${item.content.slice(0, 120)}...` : item.content;
 
         return (
-            <Pressable onPress={() => openEntry(item.date)} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}> 
+            <Pressable onPress={() => openEntry(item.id)} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}> 
                 <Surface style={[styles.card, { backgroundColor: 'transparent', borderColor: palette.glassBorder }]} elevation={0}>
                     <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
                     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
@@ -125,7 +95,7 @@ export default function JournalListScreen() {
                                     {friendlyDate.split(' ')[0]}
                                 </Text>
                                 <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 4, fontWeight: '600' }}>
-                                    {item.title}
+                                    {item.title?.trim() ? item.title : 'Untitled entry'}
                                 </Text>
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 3 }}>
                                     {friendlyDate.substring(friendlyDate.indexOf(' ') + 1)}
@@ -139,13 +109,13 @@ export default function JournalListScreen() {
                         </Text>
 
                         <View style={styles.actionRow}>
-                            <TouchableRipple onPress={() => editEntry(item.date)} borderless style={styles.actionButton}>
+                            <TouchableRipple onPress={() => editEntry(item.id)} borderless style={styles.actionButton}>
                                 <View style={styles.actionButtonInner}>
                                     <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
                                     <Text variant="labelSmall" style={{ color: theme.colors.primary, marginLeft: 6 }}>Edit</Text>
                                 </View>
                             </TouchableRipple>
-                            <TouchableRipple onPress={() => deleteEntry(item.date)} borderless style={styles.actionButton}>
+                            <TouchableRipple onPress={() => deleteEntry(item.id)} borderless style={styles.actionButton}>
                                 <View style={styles.actionButtonInner}>
                                     <Ionicons name="trash-outline" size={14} color="#FF8C6B" />
                                     <Text variant="labelSmall" style={{ color: '#FF8C6B', marginLeft: 6 }}>Delete</Text>
@@ -187,7 +157,7 @@ export default function JournalListScreen() {
             ) : (
                 <FlatList
                     data={entries}
-                    keyExtractor={(item) => item.date}
+                    keyExtractor={(item) => item.id}
                     renderItem={renderItem}
                     contentContainerStyle={styles.listContent}
                     showsVerticalScrollIndicator={false}

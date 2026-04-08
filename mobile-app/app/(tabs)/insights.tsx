@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { Card, Surface, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../providers/app-theme-provider';
 import { ZEN_PALETTE } from '../../constants/zen-ui';
 import { MovingZenBackground } from '../../components/moving-zen-background';
+import { MindfulAPI } from '../../services/mindfulApi';
+
+const DEMO_USERS = Array.from({ length: 16 }, (_, index) => `p${String(index + 1).padStart(2, '0')}`);
 
 function InsightCard({
     title,
@@ -52,6 +55,67 @@ export default function InsightsScreen() {
     const { isDark } = useAppTheme();
     const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
     const insets = useSafeAreaInsets();
+    const [activeUser, setActiveUser] = useState('p01');
+    const [loading, setLoading] = useState(true);
+    const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [topFeature, setTopFeature] = useState('--');
+    const [insightMessage, setInsightMessage] = useState('--');
+    const [topFeatureImpact, setTopFeatureImpact] = useState<number | null>(null);
+    const [dataDaysUsed, setDataDaysUsed] = useState<number | null>(null);
+    const [latestFeatureValues, setLatestFeatureValues] = useState<{ key: string; value: number }[]>([]);
+    const [featureImportances, setFeatureImportances] = useState<{ feature: string; impact_percent: number }[]>([]);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        const loadInsight = async () => {
+            setLoading(true);
+            setErrorMessage(null);
+
+            try {
+                const response = await MindfulAPI.getInsight(activeUser);
+                if (cancelled) {
+                    return;
+                }
+
+                if (response.status === 'success') {
+                    setTopFeature(response.data.top_feature || '--');
+                    setInsightMessage(response.data.insight_message || '--');
+                    setTopFeatureImpact(response.data.top_feature_impact_percent ?? null);
+                    setDataDaysUsed(response.data.data_days_used ?? null);
+                    setLatestFeatureValues(
+                        Object.entries(response.data.latest_feature_values || {}).map(([key, value]) => ({ key, value }))
+                    );
+                    setFeatureImportances(response.data.feature_importances || []);
+                } else {
+                    throw new Error(response.message || 'No insight available right now.');
+                }
+            } catch (error) {
+                if (cancelled) {
+                    return;
+                }
+
+                const message = error instanceof Error ? error.message : 'Keep wearing your watch. The insight model needs more data.';
+                setErrorMessage(message);
+                setTopFeature('--');
+                setInsightMessage('--');
+                setTopFeatureImpact(null);
+                setDataDaysUsed(null);
+                setLatestFeatureValues([]);
+                setFeatureImportances([]);
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        loadInsight();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeUser]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -68,6 +132,30 @@ export default function InsightsScreen() {
                     Your mood patterns and wellness themes appear here.
                 </Text>
 
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.switcherRow} style={styles.switcherScroll}>
+                    {DEMO_USERS.map((user) => {
+                        const selected = user === activeUser;
+                        return (
+                            <Chip
+                                key={user}
+                                compact
+                                selected={selected}
+                                onPress={() => setActiveUser(user)}
+                                style={[
+                                    styles.userChip,
+                                    {
+                                        backgroundColor: selected ? theme.colors.primary : palette.glass,
+                                        borderColor: selected ? 'transparent' : palette.glassBorder,
+                                    },
+                                ]}
+                                textStyle={{ color: selected ? theme.colors.onPrimary : theme.colors.onSurface }}
+                            >
+                                {user.toUpperCase()}
+                            </Chip>
+                        );
+                    })}
+                </ScrollView>
+
                 <Card mode="contained" style={[styles.summaryCard, { borderColor: palette.glassBorder }]}>
                     <BlurView intensity={isDark ? 22 : 46} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
                     <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
@@ -78,37 +166,109 @@ export default function InsightsScreen() {
                             </Surface>
                             <View style={{ flex: 1, marginLeft: 12 }}>
                                 <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
-                                    Daily Summary
+                                    Active User
                                 </Text>
                                 <Text variant="titleMedium" style={{ color: theme.colors.onSurface, fontWeight: '600', marginTop: 4 }}>
-                                    AI Pulse
+                                    {activeUser.toUpperCase()} Insight Session
                                 </Text>
                             </View>
                         </View>
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12, lineHeight: 20 }}>
-                            Mood score, strongest patterns, and key themes from your journal entries will appear here once connected to the analysis endpoint.
-                        </Text>
+                        {loading ? (
+                            <View style={styles.loadingRow}>
+                                <ActivityIndicator size="small" color={theme.colors.primary} />
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 10 }}>
+                                    Generating your insight...
+                                </Text>
+                            </View>
+                        ) : errorMessage ? (
+                            <View style={styles.warningCard}>
+                                <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
+                                    Keep wearing your watch
+                                </Text>
+                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8, lineHeight: 20 }}>
+                                    {errorMessage}
+                                </Text>
+                            </View>
+                        ) : (
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12, lineHeight: 20 }}>
+                                Model response loaded successfully.
+                            </Text>
+                        )}
                     </Card.Content>
                 </Card>
 
                 <InsightCard
-                    title="Mood Score"
-                    value="--"
-                    detail="This card will show the mood score from your journal analysis endpoint."
-                    icon="happy-outline"
-                />
-                <InsightCard
                     title="Top Feature"
-                    value="--"
-                    detail="This card will highlight the strongest biological driver from the ML response."
+                    value={loading ? '...' : errorMessage ? '--' : topFeature}
+                    detail={loading ? 'Fetching top feature from the model...' : errorMessage ? 'No top feature available for this user yet.' : topFeatureImpact !== null ? `Strongest driver (${topFeatureImpact}% impact).` : 'Strongest biological driver identified by the Random Forest model.'}
                     icon="pulse-outline"
                 />
                 <InsightCard
-                    title="Themes"
-                    value="--"
-                    detail="Themes from the journal analysis will appear here as chips or grouped cards."
-                    icon="chatbubble-ellipses-outline"
+                    title="Insight Message"
+                    value={loading ? '...' : errorMessage ? '--' : 'Generated'}
+                    detail={loading ? 'Fetching narrative insight...' : errorMessage ? 'No insight message available for this user yet.' : insightMessage}
+                    icon="sparkles-outline"
                 />
+
+                {!loading && !errorMessage ? (
+                    <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder }]}>
+                        <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
+                        <Card.Content style={styles.cardContent}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
+                                Model Input Snapshot {dataDaysUsed ? `(Days used: ${dataDaysUsed})` : ''}
+                            </Text>
+                            <View style={styles.dataGrid}>
+                                {latestFeatureValues.length > 0 ? (
+                                    latestFeatureValues.map((item) => (
+                                        <View key={item.key} style={styles.dataRow}>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}>
+                                                {item.key.replaceAll('_', ' ')}
+                                            </Text>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
+                                                {String(item.value)}
+                                            </Text>
+                                        </View>
+                                    ))
+                                ) : (
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                                        No feature snapshot available.
+                                    </Text>
+                                )}
+                            </View>
+                        </Card.Content>
+                    </Card>
+                ) : null}
+
+                {!loading && !errorMessage ? (
+                    <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder }]}>
+                        <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+                        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
+                        <Card.Content style={styles.cardContent}>
+                            <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
+                                Feature Importances
+                            </Text>
+                            <View style={styles.dataGrid}>
+                                {featureImportances.length > 0 ? (
+                                    featureImportances.map((item) => (
+                                        <View key={item.feature} style={styles.dataRow}>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, flex: 1 }}>
+                                                {item.feature.replaceAll('_', ' ')}
+                                            </Text>
+                                            <Text variant="bodySmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
+                                                {item.impact_percent}%
+                                            </Text>
+                                        </View>
+                                    ))
+                                ) : (
+                                    <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                                        No feature importances available.
+                                    </Text>
+                                )}
+                            </View>
+                        </Card.Content>
+                    </Card>
+                ) : null}
             </ScrollView>
         </View>
     );
@@ -120,6 +280,17 @@ const styles = StyleSheet.create({
     },
     content: {
         paddingHorizontal: 16,
+    },
+    switcherScroll: {
+        marginBottom: 14,
+    },
+    switcherRow: {
+        flexDirection: 'row',
+        gap: 8,
+        paddingRight: 12,
+    },
+    userChip: {
+        borderWidth: 0.8,
     },
     card: {
         borderRadius: 18,
@@ -140,6 +311,18 @@ const styles = StyleSheet.create({
     },
     summaryContent: {
         padding: 14,
+    },
+    loadingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 12,
+    },
+    warningCard: {
+        borderRadius: 14,
+        paddingHorizontal: 12,
+        paddingVertical: 12,
+        marginTop: 12,
+        backgroundColor: 'rgba(255,255,255,0.06)',
     },
     summaryHeader: {
         flexDirection: 'row',
@@ -166,5 +349,18 @@ const styles = StyleSheet.create({
         borderRadius: 20,
         justifyContent: 'center',
         alignItems: 'center',
+    },
+    dataGrid: {
+        marginTop: 12,
+        gap: 8,
+    },
+    dataRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+        borderBottomWidth: StyleSheet.hairlineWidth,
+        borderBottomColor: 'rgba(255,255,255,0.15)',
+        paddingBottom: 6,
     },
 });

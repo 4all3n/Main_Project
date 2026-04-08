@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,25 +8,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../providers/app-theme-provider';
 import { ZEN_PALETTE } from '../../../constants/zen-ui';
 import { MovingZenBackground } from '../../../components/moving-zen-background';
-
-const JOURNAL_STORAGE_KEY = '@journal_entries';
-
-type JournalEntryValue = string | { title?: string; content?: string };
-type JournalEntryMap = Record<string, JournalEntryValue>;
-
-function normalizeEntry(value: JournalEntryValue | undefined, fallbackDate: string) {
-    if (typeof value === 'string') {
-        return {
-            title: `Reflection on ${fallbackDate}`,
-            content: value,
-        };
-    }
-
-    return {
-        title: value?.title?.trim() || `Reflection on ${fallbackDate}`,
-        content: value?.content || '',
-    };
-}
+import {
+    buildJournalSourceHash,
+    createJournalId,
+    readJournalEntries,
+    upsertJournalEntry,
+} from '../../../lib/journal-storage';
 
 export default function JournalScreen() {
     const theme = useTheme();
@@ -44,7 +30,7 @@ export default function JournalScreen() {
     
     // Date selection states
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [editingDateKey, setEditingDateKey] = useState<string | null>(null);
+    const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
     const [showPicker, setShowPicker] = useState(false);
 
     const getDateKey = (date = selectedDate) => date.toLocaleDateString('en-CA');
@@ -73,22 +59,17 @@ export default function JournalScreen() {
                     return;
                 }
 
-                const storedEntries = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY);
-                const entries: JournalEntryMap = storedEntries ? JSON.parse(storedEntries) : {};
-                const existingEntry = entries[dateParam];
-
-                const parsedDate = new Date(dateParam);
+                const entries = await readJournalEntries();
+                const existingEntry = entries.find((entry) => entry.id === dateParam);
+                const parsedDate = new Date(existingEntry?.date || dateParam);
                 if (!Number.isNaN(parsedDate.getTime())) {
                     setSelectedDate(parsedDate);
                 }
 
                 if (existingEntry) {
-                    const normalized = normalizeEntry(existingEntry, dateParam);
-                    setEntryTitle(normalized.title);
-                    setEntryText(normalized.content);
-                    setEditingDateKey(dateParam);
-                } else {
-                    setEntryTitle(`Reflection on ${dateParam}`);
+                    setEntryTitle(existingEntry.title || '');
+                    setEntryText(existingEntry.content || '');
+                    setEditingEntryId(dateParam);
                 }
             } catch (error) {
                 console.error('Failed to load journal entry for editing:', error);
@@ -110,25 +91,30 @@ export default function JournalScreen() {
     const handleSaveEntry = async () => {
         setIsSaving(true);
         try {
-            const todayKey = getDateKey();
-            
-            // Fetch existing object mapping dates to entries
-            const storedEntries = await AsyncStorage.getItem(JOURNAL_STORAGE_KEY);
-            const entries: JournalEntryMap = storedEntries ? JSON.parse(storedEntries) : {};
+            const entryDate = getDateKey();
+            const entries = await readJournalEntries();
+            const existingEntry = editingEntryId
+                ? entries.find((entry) => entry.id === editingEntryId)
+                : undefined;
+            const nowIso = new Date().toISOString();
+            const nextHash = buildJournalSourceHash(entryTitle, entryText);
+            const previousHash = existingEntry
+                ? buildJournalSourceHash(existingEntry.title, existingEntry.content)
+                : null;
 
-            if (editingDateKey && editingDateKey !== todayKey) {
-                delete entries[editingDateKey];
-            }
-            
-            // Update today's entry
-            entries[todayKey] = {
-                title: entryTitle.trim() || `Reflection on ${todayKey}`,
+            await upsertJournalEntry({
+                id: existingEntry?.id || createJournalId(),
+                date: entryDate,
+                title: entryTitle.trim(),
                 content: entryText,
-            };
-            
-            // Save stringified map back to storage
-            await AsyncStorage.setItem(JOURNAL_STORAGE_KEY, JSON.stringify(entries));
-            // Return back to the journal list view upon success
+                createdAt: existingEntry?.createdAt || nowIso,
+                updatedAt: nowIso,
+                analysis:
+                    existingEntry && previousHash === nextHash
+                        ? existingEntry.analysis
+                        : undefined,
+            });
+
             router.back();
         } catch (error) {
             console.error('Failed to save journal entry:', error);
@@ -156,14 +142,14 @@ export default function JournalScreen() {
                         size={26}
                         iconColor={theme.colors.primary}
                         style={styles.saveIconButton}
-                        disabled={isSaving || entryTitle.trim().length === 0 || entryText.trim().length === 0}
+                        disabled={isSaving || entryText.trim().length === 0}
                         onPress={handleSaveEntry}
                     />
                 </View>
 
                 <View style={styles.headerTextBlockBelow}>
                     <Text variant="labelLarge" style={{ color: theme.colors.primary, letterSpacing: 1.2, textTransform: 'uppercase' }}>
-                        {editingDateKey ? 'Edit Entry' : 'New Entry'}
+                        {editingEntryId ? 'Edit Entry' : 'New Entry'}
                     </Text>
                     <Text variant="headlineSmall" style={{ color: theme.colors.onBackground, fontWeight: '700', marginTop: 4 }}>
                         {displayDate}
@@ -181,7 +167,7 @@ export default function JournalScreen() {
                     </Surface>
                     <Surface style={[styles.metaChip, { backgroundColor: palette.glass }]} elevation={0}>
                         <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                            {editingDateKey ? 'Editing' : 'Draft'}
+                            {editingEntryId ? 'Editing' : 'Draft'}
                         </Text>
                     </Surface>
                 </TouchableOpacity>

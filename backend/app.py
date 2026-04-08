@@ -34,7 +34,7 @@ def process_insight(user_id: str):
     result = generate_personalized_insight(user_id)
     
     if "error" in result:
-        return {"status": "error", "message": result["error"]}
+        return {"status": "error", "message": result.get("message") or result["error"]}
         
     return {
         "status": "success",

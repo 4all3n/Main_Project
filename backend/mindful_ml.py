@@ -52,9 +52,6 @@ def generate_personalized_insight(user_id: str) -> dict:
     X = merged_df[features]
     y = merged_df['mood_category'] 
 
-    # ==========================================
-    # --- NEW FIX: DATA SANITY CHECKS ---
-    # ==========================================
     # 1. Check if the user has enough total days to run Machine Learning
     if len(X) < 5:
         return {
@@ -69,7 +66,6 @@ def generate_personalized_insight(user_id: str) -> dict:
             "error": "No mood variance.", 
             "message": f"Participant {user_id} exclusively logged '{only_mood}' moods. The AI needs a mix of good and bad days to find out what triggers your changes."
         }
-    # ==========================================
 
     # --- PRODUCTION SCALING: MODEL SERIALIZATION ---
     # Create the directory if it doesn't exist
@@ -122,15 +118,33 @@ def generate_personalized_insight(user_id: str) -> dict:
     plt.title(f'Personalized Health Drivers for Participant {user_id}')
     plt.tight_layout()
     plt.savefig(f'output_graphs/feature_importance_{user_id}.png')
-    plt.close() # Close plot to save memory
+    plt.close()
 
     # Extract Top Insight
     top_feature = feature_importance_df.iloc[0]['Physical Metric'].replace('_', ' ')
+    top_feature_impact_percent = float(round(feature_importance_df.iloc[0]['Impact (%)'], 2))
     insight_text = f"Based on your data, your {top_feature} is the #1 driver for your mood today!"
+
+    latest_feature_values = {}
+    latest_row = merged_df.iloc[-1]
+    for feature_name in features:
+        latest_feature_values[feature_name] = float(round(latest_row[feature_name], 2))
+
+    feature_importances = [
+        {
+            "feature": row['Physical Metric'],
+            "impact_percent": float(round(row['Impact (%)'], 2)),
+        }
+        for _, row in feature_importance_df.iterrows()
+    ]
 
     return {
         "user_id": user_id,
         "top_feature": top_feature,
+        "top_feature_impact_percent": top_feature_impact_percent,
         "insight_message": insight_text,
-        "graphs_generated": True
+        "graphs_generated": True,
+        "data_days_used": int(len(merged_df)),
+        "latest_feature_values": latest_feature_values,
+        "feature_importances": feature_importances,
     }

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Architecture Diagram</title>
+<style>
+  /* Base Setup for Professional Look */
+  :root {
+    --bg-white: #ffffff;
+    --card-bg: #ffffff;
+    --border-light: #6a6a6b;
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --blue-primary: #2563eb;
+    --blue-light: #eff6ff;
+    --green-primary: #16a34a;
+    --green-light: #f0fdf4;
+    --purple-primary: #9333ea;
+    --purple-light: #faf5ff;
+    --orange-primary: #ea580c;
+    --orange-light: #fff7ed;
+    --arrow-color: #94a3b8;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-white);
+    margin: 0;
+    padding: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    color: var(--text-main);
+  }
+
+  /* Main Flowchart Container */
+  .diagram-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 15px;
+    width: 100%;
+    max-width: 1400px;
+  }
+
+  /* Node Cards */
+  .node {
+    background: var(--card-bg);
+    border: 2px solid var(--border-light);
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    width: 260px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .node-header {
+    padding: 12px 16px;
+    font-weight: 600;
+    font-size: 14px;
+    border-bottom: 2.5px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .node-body {
+    padding: 16px;
+    font-size: 13px;
+    line-height: 1.5; /* For colored left border effect */
+  }
+
+  .node-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  /* Tech Stack Pills */
+  .tech-pill {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-top: 8px;
+    margin-right: 4px;
+    border: 1px solid #e2e8f0;
+  }
+
+  /* Specific Layer Colors */
+  .layer-1 .node-header { background: var(--blue-light); color: var(--blue-primary); border-bottom-color: #bfdbfe; }
+  .layer-2 .node-header { background: var(--purple-light); color: var(--purple-primary); border-bottom-color: #e9d5ff; }
+  .layer-3a .node-header { background: var(--orange-light); color: var(--orange-primary); border-bottom-color: #fed7aa; }
+  .layer-3b .node-header { background: var(--green-light); color: var(--green-primary); border-bottom-color: #bbf7d0; }
+  .layer-4 .node-header { background: var(--text-main); color: var(--bg-white); }
+
+  /* Inner elements for App */
+  .sub-module {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+  }
+  .sub-module:last-child { margin-bottom: 0; }
+  .sub-module strong { display: block; font-size: 12px; color: #334155; }
+  .sub-module span { font-size: 11px; color: var(--text-muted); }
+
+  /* Columns & Layouts */
+  .column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .parallel-engines {
+    display: flex;
+    flex-direction: column;
+    gap: 40px; /* Space between ML and NLP */
+  }
+
+  /* --- Connecting Arrows (Horizontal) --- */
+  .arrow-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+    width: 60px;
+  }
+
+  .line-horizontal {
+    width: 100%;
+    height: 2px;
+    background-color: var(--arrow-color);
+    position: relative;
+  }
+
+  .line-horizontal::after {
+    content: '';
+    position: absolute;
+    right: -2px;
+    top: -4px;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid var(--arrow-color);
+  }
+
+  .data-label {
+    position: absolute;
+    top: -20px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--blue-primary);
+    background: var(--bg-white);
+    padding: 0 4px;
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  /* --- Fork & Merge Connectors --- */
+  .fork-connector {
+    width: 40px;
+    height: 250px; /* Aligns with parallel gap */
+    position: relative;
+  }
+  
+  .fork-connector::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--arrow-color);
+    transform: translateY(-50%);
+  }
+
+  .fork-connector-paths {
+    position: absolute;
+    top: 35px; /* Adjust based on node heights */
+    bottom: 35px;
+    left: 50%;
+    width: 50%;
+    border-top: 2px solid var(--arrow-color);
+    border-bottom: 2px solid var(--arrow-color);
+    border-left: 2px solid var(--arrow-color);
+  }
+  
+  .fork-arrow-top, .fork-arrow-bottom {
+    position: absolute;
+    right: -2px;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid var(--arrow-color);
+  }
+  .fork-arrow-top { top: -5px; }
+  .fork-arrow-bottom { bottom: -5px; }
+
+  .merge-connector {
+    width: 40px;
+    height: 250px;
+    position: relative;
+  }
+  
+  .merge-connector-paths {
+    position: absolute;
+    top: 35px;
+    bottom: 35px;
+    right: 50%;
+    width: 50%;
+    border-top: 2px solid var(--arrow-color);
+    border-bottom: 2px solid var(--arrow-color);
+    border-right: 2px solid var(--arrow-color);
+  }
+
+  .merge-connector-line {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 50%;
+    height: 2px;
+    background: var(--arrow-color);
+    transform: translateY(-50%);
+  }
+
+  .merge-arrow {
+    position: absolute;
+    top: 50%;
+    right: -2px;
+    transform: translateY(-50%);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 6px solid var(--arrow-color);
+  }
+
+</style>
+</head>
+<body>
+
+<div class="diagram-container">
+
+  <div class="column">
+    <div style="font-weight: bold; color: var(--text-main); font-size: 14px;">[ User ]</div>
+    <div style="height: 20px; width: 2px; background: var(--arrow-color); position: relative;">
+        <div style="position: absolute; bottom: -2px; left: -4px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--arrow-color);"></div>
+    </div>
+    
+    <div class="node layer-1">
+      <div class="node-header">
+        Layer 1: Mobile Client
+        <span>📱</span>
+      </div>
+      <div class="node-body">
+        <div class="node-title">Data Acquisition Layer</div>
+        
+        <div class="sub-module">
+          <strong>Health Connect API</strong>
+          <span>Objective Data (Steps, Sleep, Dist.)<br><i>Deduplication & Overlap Logic</i></span>
+        </div>
+        
+        <div class="sub-module">
+          <strong>Journaling UI</strong>
+          <span>Subjective Data<br><i>Unstructured Text Capture</i></span>
+        </div>
+        <div class="tech-pill">React Native (Expo)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="arrow-group">
+    <span class="data-label">JSON Payload</span>
+    <div class="line-horizontal"></div>
+  </div>
+
+  <div class="column">
+    <div class="node layer-2">
+      <div class="node-header">
+        Layer 2: The Network
+        <span>⚙️</span>
+      </div>
+      <div class="node-body">
+        <div class="node-title">The API Bridge</div>
+        <div style="font-family: monospace; font-size: 11px; background: #f8fafc; padding: 6px; border-radius: 4px; border: 1px solid #e2e8f0; margin-bottom: 10px;">
+          <span style="color: var(--purple-primary); font-weight: bold;">POST</span> /api/analyze-journal<br>
+          <span style="color: var(--blue-primary); font-weight: bold;">GET</span> /api/get-insight/{id}
+        </div>
+        <div class="tech-pill">Python</div>
+        <div class="tech-pill">FastAPI</div>
+        <div class="tech-pill">Uvicorn</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fork-connector">
+    <div class="fork-connector-paths">
+      <div class="fork-arrow-top"></div>
+      <div class="fork-arrow-bottom"></div>
+    </div>
+  </div>
+
+  <div class="parallel-engines">
+    <div class="node layer-3a">
+      <div class="node-header">
+        Pipeline A: NLP
+        <span>🧠</span>
+      </div>
+      <div class="node-body">
+        <div class="node-title">Text-to-Math Module</div>
+        <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: var(--text-muted); line-height: 1.6;">
+            <li>Sentence segmentation</li>
+            <li>Neutral filler exclusion</li>
+            <li>Polarity scoring & POS Tagging</li>
+        </ul>
+        <div style="margin-top: 10px; font-weight: 600; font-size: 11px;">Output: Mood Score (1-5) & Themes</div>
+        <div class="tech-pill">NLTK</div>
+        <div class="tech-pill">VADER</div>
+      </div>
+    </div>
+
+    <div class="node layer-3b">
+      <div class="node-header">
+        Pipeline B: ML
+        <span>📊</span>
+      </div>
+      <div class="node-body">
+        <div class="node-title">n-of-1 Prediction Module</div>
+        <ul style="margin: 0; padding-left: 16px; font-size: 11px; color: var(--text-muted); line-height: 1.6;">
+            <li>Fuse Health + Mood Data</li>
+            <li>Defensive Checks / Dynamic SMOTE</li>
+            <li>Model Training</li>
+        </ul>
+        <div style="margin-top: 10px; font-weight: 600; font-size: 11px;">Output: Feature Importances</div>
+        <div class="tech-pill">Scikit-Learn</div>
+        <div class="tech-pill">Random Forest</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="merge-connector">
+    <div class="merge-connector-paths"></div>
+    <div class="merge-connector-line"></div>
+    <div class="merge-arrow"></div>
+  </div>
+
+  <div class="column">
+    <div class="node layer-4">
+      <div class="node-header">
+        Layer 4: Presentation
+        <span>✨</span>
+      </div>
+      <div class="node-body">
+        <div class="node-title">Insight Generation</div>
+        <p style="margin: 0 0 10px 0; font-size: 11px; color: var(--text-muted);">
+          Translates raw mathematical features into human-readable rule-based strings.
+        </p>
+        <div style="background: #f1f5f9; padding: 8px; border-radius: 4px; font-size: 11px; font-style: italic; border-left: 3px solid var(--blue-primary);">
+          "Your sleep score yesterday is the #1 driver for your mood today!"
+        </div>
+      </div>
+    </div>
+
+    <div style="height: 20px; width: 2px; background: var(--arrow-color); position: relative;">
+        <div style="position: absolute; bottom: -2px; left: -4px; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 6px solid var(--arrow-color);"></div>
+    </div>
+
+    <div class="node" style="border-color: var(--blue-primary); border-width: px;">
+      <div class="node-body" style="text-align: center; padding: 20px;">
+        <div class="node-title" style="color: var(--blue-primary); margin: 0;">Insights Dashboard</div>
+        <p style="font-size: 11px; margin: 5px 0 0 0; color: var(--text-muted);">React Native (Glassmorphic UI)</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

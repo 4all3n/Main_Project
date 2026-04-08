@@ -32,6 +32,51 @@ const INITIAL_STATE: HealthData = {
 
 const STEP_GOAL = 10000;
 const SLEEP_GOAL_HOURS = 8;
+const ACTIVE_CALORIES_GOAL = 600;
+const SYNC_LAG_MS = 120_000;
+const AUTO_SYNC_INTERVAL_MS = 90_000;
+
+function getStartOfDay(date: Date) {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+function getOverlapMinutes(startTime: string, endTime: string, windowStart: Date, windowEnd: Date) {
+  const start = new Date(startTime).getTime();
+  const end = new Date(endTime).getTime();
+  const overlapStart = Math.max(start, windowStart.getTime());
+  const overlapEnd = Math.min(end, windowEnd.getTime());
+  if (overlapEnd <= overlapStart) return 0;
+  return (overlapEnd - overlapStart) / 1000 / 60;
+}
+
+async function getDeduplicatedStepsTotal(timeRangeFilter: {
+  operator: 'between';
+  startTime: string;
+  endTime: string;
+}) {
+  const base = await aggregateRecord({ recordType: 'Steps', timeRangeFilter });
+  const baseCount = base.COUNT_TOTAL || 0;
+  const origins = base.dataOrigins || [];
+
+  if (origins.length <= 1) {
+    return baseCount;
+  }
+
+  const perOrigin = await Promise.all(
+    origins.map((origin) =>
+      aggregateRecord({
+        recordType: 'Steps',
+        timeRangeFilter,
+        dataOriginFilter: [origin],
+      })
+    )
+  );
+
+  const bestOriginCount = Math.max(...perOrigin.map((result) => result.COUNT_TOTAL || 0), baseCount);
+  return bestOriginCount;
+}
 
 function CircularMeter({
   size,
@@ -92,6 +137,9 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [permissionGranted, setPermissionGranted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const fetchInFlightRef = useRef(false);
+  const autoSyncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const theme = useTheme();
   const { isDark, toggleTheme } = useAppTheme();
@@ -155,6 +203,11 @@ export default function Dashboard() {
   };
 
   const fetchHealthData = useCallback(async () => {
+    if (fetchInFlightRef.current) {
+      return;
+    }
+
+    fetchInFlightRef.current = true;
     try {
       const isInitialized = await initialize();
       if (!isInitialized) return;
@@ -171,39 +224,37 @@ export default function Dashboard() {
         setPermissionGranted(true);
       }
 
-      const today = new Date();
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+      const now = new Date(Date.now() - SYNC_LAG_MS);
+      const startOfDayDate = getStartOfDay(now);
+      const startOfDay = startOfDayDate.toISOString();
       const timeRangeFilter = {
         operator: 'between' as const,
         startTime: startOfDay,
-        endTime: new Date().toISOString(),
+        endTime: now.toISOString(),
       };
 
-      const [stepsResult, activeCals, totalCals, distanceResult, heartRateResult, sleepResult] = await Promise.all([
-        aggregateRecord({ recordType: 'Steps', timeRangeFilter }),
+      const [stepsTotal, activeCals, totalCals, distanceResult, heartRateResult, sleepResult] = await Promise.all([
+        getDeduplicatedStepsTotal(timeRangeFilter),
         aggregateRecord({ recordType: 'ActiveCaloriesBurned', timeRangeFilter }),
         aggregateRecord({ recordType: 'TotalCaloriesBurned', timeRangeFilter }),
         aggregateRecord({ recordType: 'Distance', timeRangeFilter }),
         aggregateRecord({ recordType: 'HeartRate', timeRangeFilter }),
         readRecords('SleepSession', {
           timeRangeFilter: {
-            operator: 'after',
-            startTime: new Date(new Date(startOfDay).getTime() - 86400000).toISOString(),
+            operator: 'between',
+            startTime: new Date(startOfDayDate.getTime() - 86400000).toISOString(),
+            endTime: now.toISOString(),
           },
         }),
       ]);
 
       let totalSleepMinutes = 0;
       sleepResult.records.forEach((record: any) => {
-        const end = new Date(record.endTime).getTime();
-        if (end > new Date(startOfDay).getTime()) {
-          const start = new Date(record.startTime).getTime();
-          totalSleepMinutes += (end - start) / 1000 / 60;
-        }
+        totalSleepMinutes += getOverlapMinutes(record.startTime, record.endTime, startOfDayDate, now);
       });
 
       setData({
-        steps: stepsResult.COUNT_TOTAL || 0,
+        steps: stepsTotal,
         activeCalories: Math.round(activeCals.ACTIVE_CALORIES_TOTAL?.inKilocalories || 0),
         totalCalories: Math.round(totalCals.ENERGY_TOTAL?.inKilocalories || 0),
         distance: Math.round(distanceResult.DISTANCE?.inMeters || 0),
@@ -219,12 +270,47 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Error fetching health data:', error);
     } finally {
+      fetchInFlightRef.current = false;
       setLoading(false);
     }
   }, [permissionGranted]);
 
   useEffect(() => {
-    fetchHealthData();
+    let cancelled = false;
+
+    const scheduleAutoSync = async () => {
+      await fetchHealthData();
+
+      if (cancelled) {
+        return;
+      }
+
+      autoSyncTimeoutRef.current = setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+
+        autoSyncIntervalRef.current = setInterval(() => {
+          fetchHealthData();
+        }, AUTO_SYNC_INTERVAL_MS);
+      }, 5000);
+    };
+
+    scheduleAutoSync();
+
+    return () => {
+      cancelled = true;
+
+      if (autoSyncTimeoutRef.current) {
+        clearTimeout(autoSyncTimeoutRef.current);
+        autoSyncTimeoutRef.current = null;
+      }
+
+      if (autoSyncIntervalRef.current) {
+        clearInterval(autoSyncIntervalRef.current);
+        autoSyncIntervalRef.current = null;
+      }
+    };
   }, [fetchHealthData]);
 
   const onRefresh = useCallback(async () => {
@@ -244,9 +330,9 @@ export default function Dashboard() {
   const heroScore = useMemo(() => {
     const stepScore = Math.min(data.steps / STEP_GOAL, 1);
     const sleepScore = Math.min(data.sleepMinutes / (SLEEP_GOAL_HOURS * 60), 1);
-    const burnScore = Math.min(data.totalCalories / 2200, 1);
+    const burnScore = Math.min(data.activeCalories / ACTIVE_CALORIES_GOAL, 1);
     return Math.round((stepScore * 0.4 + sleepScore * 0.35 + burnScore * 0.25) * 100);
-  }, [data.steps, data.sleepMinutes, data.totalCalories]);
+  }, [data.steps, data.sleepMinutes, data.activeCalories]);
 
   const metrics = [
     {

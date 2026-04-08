@@ -1,6 +1,6 @@
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-from nltk.tokenize import sent_tokenize, RegexpTokenizer # <-- Swapped word_tokenize for RegexpTokenizer
+from nltk.tokenize import sent_tokenize, RegexpTokenizer
 from nltk.corpus import stopwords
 from collections import Counter
 import string
@@ -20,11 +20,10 @@ def analyze_journal(journal_text: str) -> dict:
 
     analyzer = SentimentIntensityAnalyzer()
     
-    # --- THE FIX: Initialize the Regex Tokenizer ---
     # r'\w+' tells Python: "Only match alphanumeric characters. Ignore ALL quotes, commas, etc."
     word_cleaner = RegexpTokenizer(r'\w+')
     
-    stop_words = set(stopwords.words('english')) # We no longer need string.punctuation here!
+    stop_words = set(stopwords.words('english'))
     
     total_compound_score = 0
     total_sentences = 0

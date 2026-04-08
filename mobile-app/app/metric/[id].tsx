@@ -11,6 +11,53 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../providers/app-theme-provider';
 import { ZEN_PALETTE } from '../../constants/zen-ui';
 
+function getStartOfDay(date: Date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    return start;
+}
+
+function getEndOfDay(date: Date) {
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    return end;
+}
+
+function getOverlapMinutes(startTime: string, endTime: string, windowStart: Date, windowEnd: Date) {
+    const start = new Date(startTime).getTime();
+    const end = new Date(endTime).getTime();
+    const overlapStart = Math.max(start, windowStart.getTime());
+    const overlapEnd = Math.min(end, windowEnd.getTime());
+    if (overlapEnd <= overlapStart) return 0;
+    return (overlapEnd - overlapStart) / 1000 / 60;
+}
+
+async function getDeduplicatedStepsTotal(timeRangeFilter: {
+    operator: 'between';
+    startTime: string;
+    endTime: string;
+}) {
+    const base = await aggregateRecord({ recordType: 'Steps', timeRangeFilter });
+    const baseCount = base.COUNT_TOTAL || 0;
+    const origins = base.dataOrigins || [];
+
+    if (origins.length <= 1) {
+        return baseCount;
+    }
+
+    const perOrigin = await Promise.all(
+        origins.map((origin) =>
+            aggregateRecord({
+                recordType: 'Steps',
+                timeRangeFilter,
+                dataOriginFilter: [origin],
+            })
+        )
+    );
+
+    return Math.max(...perOrigin.map((result) => result.COUNT_TOTAL || 0), baseCount);
+}
+
 export default function MetricDetailScreen() {
     const { id, payload } = useLocalSearchParams();
     const router = useRouter();
@@ -31,6 +78,13 @@ export default function MetricDetailScreen() {
         data = null;
     }
 
+    const color = data?.color ?? theme.colors.primary;
+    const title = data?.title ?? 'Metric';
+    const value = data?.value ?? '--';
+    const unit = data?.unit ?? '';
+    const icon = data?.icon ?? 'analytics-outline';
+    const subValue = data?.subValue ?? '';
+
     useEffect(() => {
         if (!payload || !id) return;
 
@@ -42,9 +96,11 @@ export default function MetricDetailScreen() {
                 for (let i = 6; i >= 0; i--) {
                     const targetDate = new Date();
                     targetDate.setDate(targetDate.getDate() - i);
-                    
-                    const startOfDay = new Date(targetDate.setHours(0, 0, 0, 0)).toISOString();
-                    const endOfDay = new Date(targetDate.setHours(23, 59, 59, 999)).toISOString();
+
+                    const startOfDayDate = getStartOfDay(targetDate);
+                    const endOfDayDate = getEndOfDay(targetDate);
+                    const startOfDay = startOfDayDate.toISOString();
+                    const endOfDay = endOfDayDate.toISOString();
                     const dayLabel = targetDate.toLocaleDateString('en-US', { weekday: 'short' });
 
                     const timeRangeFilter = {
@@ -56,8 +112,7 @@ export default function MetricDetailScreen() {
                     let value = 0;
 
                     if (id === 'steps') {
-                        const res = await aggregateRecord({ recordType: 'Steps', timeRangeFilter });
-                        value = res.COUNT_TOTAL || 0;
+                        value = await getDeduplicatedStepsTotal(timeRangeFilter);
                     } else if (id === 'activeEnergy') {
                         const res = await aggregateRecord({ recordType: 'ActiveCaloriesBurned', timeRangeFilter });
                         value = Math.round(res.ACTIVE_CALORIES_TOTAL?.inKilocalories || 0);
@@ -75,11 +130,12 @@ export default function MetricDetailScreen() {
                         const res = await readRecords('SleepSession', { timeRangeFilter });
                         let totalSleepMinutes = 0;
                         res.records.forEach((record: any) => {
-                            const end = new Date(record.endTime).getTime();
-                            if (end > new Date(startOfDay).getTime()) {
-                               const start = new Date(record.startTime).getTime();
-                               totalSleepMinutes += (end - start) / 1000 / 60;
-                            }
+                            totalSleepMinutes += getOverlapMinutes(
+                                record.startTime,
+                                record.endTime,
+                                startOfDayDate,
+                                endOfDayDate
+                            );
                         });
                         // store as hours for the chart
                         value = parseFloat((totalSleepMinutes / 60).toFixed(1));
@@ -113,8 +169,6 @@ export default function MetricDetailScreen() {
             </View>
         );
     }
-
-    const { title, value, unit, icon, color, subValue } = data;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
