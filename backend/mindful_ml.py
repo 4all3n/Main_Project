@@ -4,6 +4,7 @@ import seaborn as sns
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.impute import SimpleImputer
+from sklearn.metrics import accuracy_score, f1_score 
 from imblearn.over_sampling import SMOTE
 import joblib
 import warnings
@@ -14,7 +15,8 @@ warnings.filterwarnings('ignore')
 def generate_personalized_insight(user_id: str) -> dict:
     """
     Fuses smartwatch data and wellness logs, handles class imbalance with SMOTE, 
-    trains (or loads) a Random Forest model, generates graphs, and returns the top insight.
+    trains (or loads) a Random Forest model, calculates performance metrics, 
+    generates graphs, and returns the top insight.
     """
     try:
         wellness_df = pd.read_csv(f'data/{user_id}/pmsys/wellness.csv')
@@ -67,8 +69,13 @@ def generate_personalized_insight(user_id: str) -> dict:
             "message": f"Participant {user_id} exclusively logged '{only_mood}' moods. The AI needs a mix of good and bad days to find out what triggers your changes."
         }
 
+    # Moved outside the loop so we can test the model even if it's loaded from disk
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    imputer = SimpleImputer(strategy='mean')
+    X_train_clean = imputer.fit_transform(X_train)
+    X_test_clean = imputer.transform(X_test)
+
     # --- PRODUCTION SCALING: MODEL SERIALIZATION ---
-    # Create the directory if it doesn't exist
     if not os.path.exists('saved_models'):
         os.makedirs('saved_models')
         
@@ -81,11 +88,6 @@ def generate_personalized_insight(user_id: str) -> dict:
     else:
         # Train a new model if one doesn't exist
         print(f"Training new model for {user_id}...")
-        
-        # Train/Test Split
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        imputer = SimpleImputer(strategy='mean')
-        X_train_clean = imputer.fit_transform(X_train)
         
         # DYNAMIC SMOTE
         min_class_samples = y_train.value_counts().min()
@@ -104,6 +106,17 @@ def generate_personalized_insight(user_id: str) -> dict:
         # Save the model to the hard drive for future API calls
         joblib.dump(rf_model, model_path)
         print(f"Model saved to {model_path}")
+
+    # --- NEW: CALCULATE MODEL EVALUATION METRICS ---
+    y_pred = rf_model.predict(X_test_clean)
+    accuracy = accuracy_score(y_test, y_pred)
+    f1 = f1_score(y_test, y_pred, average='weighted')
+    
+    # Format for clean API response (e.g., 84.5% and 0.82)
+    formatted_accuracy = round(accuracy * 100, 2)
+    formatted_f1 = round(f1, 2)
+    
+    print(f"[METRICS] Accuracy: {formatted_accuracy}% | F1-Score: {formatted_f1}")
 
     # Graph Generation
     if not os.path.exists('output_graphs'):
@@ -140,6 +153,8 @@ def generate_personalized_insight(user_id: str) -> dict:
 
     return {
         "user_id": user_id,
+        "model_accuracy_percent": formatted_accuracy, 
+        "model_f1_score": formatted_f1,                
         "top_feature": top_feature,
         "top_feature_impact_percent": top_feature_impact_percent,
         "insight_message": insight_text,
