@@ -107,12 +107,12 @@ def generate_personalized_insight(user_id: str) -> dict:
         joblib.dump(rf_model, model_path)
         print(f"Model saved to {model_path}")
 
-    # --- NEW: CALCULATE MODEL EVALUATION METRICS ---
+    # --- CALCULATE MODEL EVALUATION METRICS ---
     y_pred = rf_model.predict(X_test_clean)
     accuracy = accuracy_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred, average='weighted')
     
-    # Format for clean API response (e.g., 84.5% and 0.82)
+    # Format for clean API response
     formatted_accuracy = round(accuracy * 100, 2)
     formatted_f1 = round(f1, 2)
     

@@ -74,7 +74,7 @@ def analyze_journal(journal_text: str) -> dict:
             "themes": top_para_themes
         })
 
-    # --- NEW: Updated Math to handle the Dilution Fix ---
+    # --- Updated Math to handle the Dilution Fix ---
     if emotional_sentences_count == 0:
         mapped_mood_score = 3
     else:
@@ -87,7 +87,7 @@ def analyze_journal(journal_text: str) -> dict:
     overall_counts = Counter(all_journal_themes)
     top_overall_themes = [theme for theme, count in overall_counts.most_common(5)]
     
-    # --- NEW: Calculate Latency and Print Metrics ---
+    # --- Calculate Latency and Print Metrics ---
     end_time = time.time()
     latency_ms = round((end_time - start_time) * 1000, 2)
     neutral_ignored = total_sentences_processed - emotional_sentences_count
