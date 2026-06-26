@@ -1,8 +1,8 @@
 import { BlurView } from 'expo-blur';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Card, IconButton, Surface, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Card, IconButton, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../providers/app-theme-provider';
 import { ZEN_PALETTE } from '../../../constants/zen-ui';

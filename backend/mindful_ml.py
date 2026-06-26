@@ -19,9 +19,10 @@ def generate_personalized_insight(user_id: str) -> dict:
     generates graphs, and returns the top insight.
     """
     try:
-        wellness_df = pd.read_csv(f'data/{user_id}/pmsys/wellness.csv')
-        sleep_df = pd.read_csv(f'data/{user_id}/fitbit/sleep_score.csv')
-        steps_df = pd.read_json(f'data/{user_id}/fitbit/steps.json')
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        wellness_df = pd.read_csv(os.path.join(base_dir, 'Data', user_id, 'pmsys', 'wellness.csv'))
+        sleep_df = pd.read_csv(os.path.join(base_dir, 'Data', user_id, 'fitbit', 'sleep_score.csv'))
+        steps_df = pd.read_json(os.path.join(base_dir, 'Data', user_id, 'fitbit', 'steps.json'))
     except FileNotFoundError:
         return {"error": f"Data for {user_id} not found."}
 
@@ -76,10 +77,11 @@ def generate_personalized_insight(user_id: str) -> dict:
     X_test_clean = imputer.transform(X_test)
 
     # --- PRODUCTION SCALING: MODEL SERIALIZATION ---
-    if not os.path.exists('saved_models'):
-        os.makedirs('saved_models')
+    saved_models_dir = os.path.join(base_dir, 'saved_models')
+    if not os.path.exists(saved_models_dir):
+        os.makedirs(saved_models_dir)
         
-    model_path = f'saved_models/rf_model_{user_id}.joblib'
+    model_path = os.path.join(saved_models_dir, f'rf_model_{user_id}.joblib')
     
     if os.path.exists(model_path):
         # Load the existing model instantly!
@@ -119,8 +121,9 @@ def generate_personalized_insight(user_id: str) -> dict:
     print(f"[METRICS] Accuracy: {formatted_accuracy}% | F1-Score: {formatted_f1}")
 
     # Graph Generation
-    if not os.path.exists('output_graphs'):
-        os.makedirs('output_graphs')
+    output_graphs_dir = os.path.join(base_dir, 'output_graphs')
+    if not os.path.exists(output_graphs_dir):
+        os.makedirs(output_graphs_dir)
 
     importances = rf_model.feature_importances_
     feature_importance_df = pd.DataFrame({'Physical Metric': features, 'Impact (%)': importances * 100})
@@ -130,7 +133,7 @@ def generate_personalized_insight(user_id: str) -> dict:
     sns.barplot(x='Impact (%)', y='Physical Metric', data=feature_importance_df, palette='viridis')
     plt.title(f'Personalized Health Drivers for Participant {user_id}')
     plt.tight_layout()
-    plt.savefig(f'output_graphs/feature_importance_{user_id}.png')
+    plt.savefig(os.path.join(output_graphs_dir, f'feature_importance_{user_id}.png'))
     plt.close()
 
     # Extract Top Insight

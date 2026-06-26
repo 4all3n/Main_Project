@@ -2,7 +2,7 @@ declare const process: {
   env?: Record<string, string | undefined>;
 } | undefined;
 
-const DEFAULT_API_BASE_URL = 'https://burro-ready-strictly.ngrok-free.app';
+const DEFAULT_API_BASE_URL = 'http://192.168.0.122:8000'; // Computer's local IP address for physical devices
 
 export const API_BASE_URL =
   process?.env?.EXPO_PUBLIC_API_BASE_URL?.trim() || DEFAULT_API_BASE_URL;
@@ -38,33 +38,47 @@ export type InsightResponse =
     };
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-      ...(init?.headers || {}),
-    },
-    ...init,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
 
-  const text = await response.text();
-  let body: any = null;
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        ...(init?.headers || {}),
+      },
+      signal: controller.signal,
+      ...init,
+    });
 
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = text;
+    clearTimeout(timeoutId);
+
+    const text = await response.text();
+    let body: any = null;
+
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
     }
-  }
 
-  if (!response.ok) {
-    const message =
-      body?.message || body?.detail || `Request failed with status ${response.status}`;
-    throw new Error(message);
-  }
+    if (!response.ok) {
+      const message =
+        body?.message || body?.detail || `Request failed with status ${response.status}`;
+      throw new Error(message);
+    }
 
-  return body as T;
+    return body as T;
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error('Connection timed out. Please check if the backend server is running.');
+    }
+    throw error;
+  }
 }
 
 export async function analyzeJournal(text: string) {
