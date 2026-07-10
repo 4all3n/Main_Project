@@ -1,0 +1,8 @@
+{
+  "model": "XGBoost",
+  "params": {
+    "n_estimators": 135,
+    "max_depth": 4,
+    "lr": 0.009327129840871794
+  }
+}

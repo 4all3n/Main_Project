@@ -1,0 +1,8 @@
+{
+  "model": "LightGBM",
+  "params": {
+    "n_estimators": 97,
+    "max_depth": 6,
+    "lr": 0.1757932573082795
+  }
+}

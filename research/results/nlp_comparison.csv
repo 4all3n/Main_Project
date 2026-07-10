@@ -1,0 +1,6 @@
+Text,GroundTruthMood,VADER_Score,RoBERTa_Score
+"I had a great day today, everything went perfectly.",5,4.7038,5
+"Oh great, another Monday where everything goes wrong.",1,3.5,1
+I don't feel happy at all.,1,2.083,1
+I am absolutely furious and angry!,1,1.3324,1
+"Not bad, could be worse.",3,2.8712,3

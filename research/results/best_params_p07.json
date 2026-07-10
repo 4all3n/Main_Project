@@ -1,0 +1,6 @@
+{
+  "model": "LogisticRegression",
+  "params": {
+    "c": 0.032134070477243086
+  }
+}

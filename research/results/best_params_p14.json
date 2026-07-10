@@ -1,0 +1,8 @@
+{
+  "model": "RandomForest",
+  "params": {
+    "n_estimators": 144,
+    "max_depth": 8,
+    "min_samples_split": 6
+  }
+}

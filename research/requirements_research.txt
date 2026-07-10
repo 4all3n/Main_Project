@@ -1,0 +1,14 @@
+torch
+transformers
+datasets
+sentence-transformers
+xgboost
+lightgbm
+optuna
+matplotlib
+seaborn
+scikit-learn
+imbalanced-learn
+pandas
+jupyter
+jupytext

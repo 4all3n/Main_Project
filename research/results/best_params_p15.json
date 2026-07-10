@@ -1,0 +1,6 @@
+{
+  "model": "KNN",
+  "params": {
+    "n_neighbors": 6
+  }
+}
