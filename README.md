@@ -18,7 +18,7 @@ The project consists of three tightly coupled components:
 
 1. **Research Pipeline** — A full ML/NLP research system built over the [PMData](https://datasets.simula.no/pmdata/) dataset, producing publishable results on multi-modal mood prediction.
 2. **FastAPI Backend** — A production Python server that runs personalized ML inference and NLP analysis.
-3. **React Native Mobile App** — A native Android app (Expo SDK 56) that syncs health data from Android Health Connect and visualises ML-driven insights.
+3. **React Native Mobile App** — A native Android app (Expo SDK 56) with a customized "Everforest" UI, featuring a dynamic widget dashboard and a pill-shaped navigation bar, that syncs health data from Android Health Connect and visualises ML-driven insights.
 
 ### Core Research Hypothesis
 
@@ -50,12 +50,14 @@ Main_Project/
 ├── mobile-app/                     ← React Native (Expo SDK 56) Android app
 │   ├── app/                        ← File-based routing via expo-router
 │   │   ├── (tabs)/
-│   │   │   ├── home.tsx            ← Dashboard: Health Connect sync, readiness score
-│   │   │   ├── insights.tsx        ← ML insight viewer: top driver, feature importance
+│   │   │   ├── _layout.tsx         ← Custom floating pill navigation bar
+│   │   │   ├── home.tsx            ← Dashboard with Fixed Widget Grid (Health Connect sync)
+│   │   │   ├── insight.tsx         ← ML insight viewer: top driver, feature importance
+│   │   │   ├── settings.tsx        ← Centralized settings (Theme, Profile, API config)
 │   │   │   └── journal/            ← Journal screens: list, create/edit, view + NLP
 │   │   └── metric/[id].tsx         ← Metric drill-down with historical bar chart
 │   ├── lib/
-│   │   └── api.ts                  ← ⚠️ Backend base URL config (MUST change this!)
+│   │   └── api.ts                  ← Dynamic Backend URL support
 │   ├── services/
 │   │   └── mindfulApi.ts           ← API service layer (typed fetch wrappers)
 │   ├── providers/                  ← React context providers
@@ -89,9 +91,16 @@ Main_Project/
 │   ├── requirements_research.txt   ← Research-only Python dependencies
 │   └── .venv/                      ← Research virtual environment (git-ignored)
 │
-├── BACKEND_PLAN.md                 ← Detailed backend implementation roadmap
-├── FRONTEND_PLAN.md                ← Detailed frontend implementation roadmap
-├── PROJECT_ROADMAP.md              ← Master project roadmap (research → backend → frontend)
+├── docs/                           ← All planning, tracking, and progress files
+│   ├── workflow/                   ← In-depth architectural workflow documentation
+│   │   ├── backend.md              ← Comprehensive backend architecture and data flow
+│   │   ├── frontend.md             ← Comprehensive frontend architecture and data flow
+│   │   └── research.md             ← Research methodology and paper writing guide
+│   ├── PROGRESS.md                 ← 📊 Main tracker — what's done, what's pending, timeline
+│   ├── BACKEND_PLAN.md             ← Detailed backend implementation roadmap
+│   ├── FRONTEND_PLAN.md            ← Detailed frontend improvement plan
+│   ├── PAPER_PLAN.md               ← Section-by-section paper writing guide
+│   └── PROJECT_ROADMAP.md          ← Master project roadmap
 ├── LICENSE                         ← GNU GPL v3
 └── README.md                       ← This file
 ```
@@ -140,6 +149,24 @@ We tested four incremental feature set configurations on all 16 personalized mod
 
 **Statistical Test:** Wilcoxon signed-rank (B vs C): **p = 0.0077 < 0.05**  
 **Conclusion:** Adding deep-learning NLP features provides a statistically significant **+11.9% absolute improvement** in mood prediction F1.
+
+---
+
+## 🚀 Development Status
+
+The project is currently in **Phase 2 (App Completion)**. 
+
+### What has been done:
+- **Research (100%)**: Full ML/NLP pipeline tested and documented.
+- **Backend (100%)**: Completed model endpoints, health checks, advanced ML features (Permutation Importance), and integrated NLP (RoBERTa + Sentence-BERT).
+- **Frontend (90%)**: Fully implemented the Everforest theme, customized navigation bar, fixed home layout with Blood Oxygen & Stress cards, functional NLP journaling UI, and ML insights card. Profile moved to settings tab.
+- **Documentation (100%)**: Added in-depth architectural and workflow documentation for backend, frontend, and research.
+
+### What is pending:
+- **Frontend Polish**: Weekly mood trend charts, 30-day view charts, and minor UI animations.
+- **Research Paper (0%)**: Setup Overleaf project, write manuscript (IEEE format), and submit to guide.
+
+For detailed task-by-task tracking, see [`docs/PROGRESS.md`](docs/PROGRESS.md) and the comprehensive workflow docs in `docs/workflow/`.
 
 ---
 
@@ -392,8 +419,8 @@ curl http://localhost:8000/api/get-insight/p01
 
 | Screen | File | Description |
 |--------|------|-------------|
-| **Dashboard** | `app/(tabs)/home.tsx` | Real-time health metrics from Android Health Connect (steps, calories, sleep stages, resting heart rate). Pull-to-refresh. Composite readiness score. Auto-syncs on focus. |
-| **Insights** | `app/(tabs)/insights.tsx` | Per-user ML mood insight: top biological driver, feature importance bar chart, model input snapshot. User ID switcher for all 16 demo users. |
+| **Dashboard** | `app/(tabs)/home.tsx` | Real-time health metrics from Android Health Connect (steps, calories, sleep stages, resting heart rate, stress, blood oxygen). Static fixed grid layout. Composite readiness score. Auto-syncs on focus. |
+| **Insights** | `app/(tabs)/insight.tsx` | Per-user ML mood insight: top biological driver, feature importance bar chart, model input snapshot. User ID switcher for all 16 demo users. |
 | **Journal List** | `app/(tabs)/journal/` | All saved journal entries sorted newest-first. Swipe-to-delete, tap to view. |
 | **Journal Create/Edit** | `app/(tabs)/journal/create.tsx` | Write or edit a journal entry with title, body text area, and date picker. |
 | **Journal View** | `app/(tabs)/journal/[id].tsx` | Full entry with auto-triggered NLP analysis on open (mood score 1–5 + keyword themes). Analysis result is cached in AsyncStorage — only re-runs if the text changes. |

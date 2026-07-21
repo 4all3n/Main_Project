@@ -1,36 +1,53 @@
+/**
+ * ZEN_PALETTE — now maps directly to Everforest Light/Dark colour tokens.
+ * Kept for backward-compat with screens that still import it (insights, journal).
+ * All glass / glow entries return transparent so they have zero visible effect.
+ */
+import { EverforestLight, EverforestDark } from './theme';
+
 export const ZEN_PALETTE = {
   light: {
-    glowA: 'rgba(58, 133, 205, 0.34)',
-    glowB: 'rgba(72, 172, 135, 0.28)',
-    glowC: 'rgba(236, 173, 79, 0.24)',
-    glass: 'rgba(255, 255, 255, 0.58)',
-    glassBorder: 'rgba(255, 255, 255, 0.72)',
-    heroStart: 'rgba(91, 157, 220, 0.56)',
-    heroMid: 'rgba(97, 187, 152, 0.42)',
-    heroEnd: 'rgba(255, 255, 255, 0.66)',
-    textSoft: '#455D73',
-    accentSteps: '#377FC2',
-    accentBurn: '#D68B2D',
-    accentDistance: '#389A78',
-    accentSleep: '#7A62B8',
-    accentHeart: '#C95F7A',
-    tabBg: 'rgba(255, 255, 255, 0.78)',
+    // Legacy glass/glow — transparent so no effect
+    glowA: 'transparent',
+    glowB: 'transparent',
+    glowC: 'transparent',
+    glass: 'transparent',
+    glassBorder: EverforestLight.bg3,
+    heroStart: EverforestLight.blue,
+    heroMid: EverforestLight.aqua,
+    heroEnd: EverforestLight.bg0,
+
+    // Text
+    textSoft: EverforestLight.grey2,
+
+    // Accents
+    accentSteps:    '#3A94C5',
+    accentBurn:     '#F57D26',
+    accentDistance: '#35A77C',
+    accentSleep:    '#DF69BA',
+    accentHeart:    '#F85552',
+
+    // Tab bar
+    tabBg: EverforestLight.bg0,
   },
   dark: {
-    glowA: 'rgba(80, 132, 182, 0.36)',
-    glowB: 'rgba(100, 156, 126, 0.28)',
-    glowC: 'rgba(126, 118, 152, 0.22)',
-    glass: 'rgba(20, 28, 37, 0.62)',
-    glassBorder: 'rgba(170, 201, 236, 0.30)',
-    heroStart: 'rgba(77, 131, 180, 0.66)',
-    heroMid: 'rgba(91, 143, 113, 0.50)',
-    heroEnd: 'rgba(17, 24, 31, 0.78)',
-    textSoft: '#BCD0DF',
-    accentSteps: '#98C3F0',
-    accentBurn: '#E5BC79',
-    accentDistance: '#8DD1BC',
-    accentSleep: '#C2ADEE',
-    accentHeart: '#F2A4B8',
-    tabBg: 'rgba(14, 20, 28, 0.84)',
+    glowA: 'transparent',
+    glowB: 'transparent',
+    glowC: 'transparent',
+    glass: 'transparent',
+    glassBorder: EverforestDark.bg4,
+    heroStart: EverforestDark.blue,
+    heroMid: EverforestDark.aqua,
+    heroEnd: EverforestDark.bg1,
+
+    textSoft: EverforestDark.grey1,
+
+    accentSteps:    EverforestDark.blue,
+    accentBurn:     EverforestDark.orange,
+    accentDistance: EverforestDark.aqua,
+    accentSleep:    EverforestDark.purple,
+    accentHeart:    EverforestDark.red,
+
+    tabBg: EverforestDark.bg0,
   },
 };

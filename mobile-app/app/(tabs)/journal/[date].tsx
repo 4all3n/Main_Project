@@ -1,19 +1,18 @@
-import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
-import { Card, IconButton, Surface, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../providers/app-theme-provider';
-import { ZEN_PALETTE } from '../../../constants/zen-ui';
-import { MovingZenBackground } from '../../../components/moving-zen-background';
+import { EverforestLight, EverforestDark } from '../../../constants/theme';
 import { MindfulAPI } from '../../../services/mindfulApi';
 import { buildJournalSourceHash, readJournalEntries, writeJournalEntries } from '../../../lib/journal-storage';
 
 export default function JournalDetailScreen() {
     const theme = useTheme();
     const { isDark } = useAppTheme();
-    const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
+    const ef = isDark ? EverforestDark : EverforestLight;
     const insets = useSafeAreaInsets();
     const router = useRouter();
     const { date } = useLocalSearchParams<{ date?: string }>();
@@ -187,7 +186,9 @@ export default function JournalDetailScreen() {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                    <IconButton icon="arrow-left" iconColor={theme.colors.onBackground} onPress={() => router.back()} />
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+                        <Ionicons name="arrow-back" size={22} color={theme.colors.onBackground} />
+                    </TouchableOpacity>
                 </View>
                 <View style={styles.center}>
                     <ActivityIndicator size="small" color={theme.colors.primary} />
@@ -200,7 +201,9 @@ export default function JournalDetailScreen() {
         return (
             <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
                 <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                    <IconButton icon="arrow-left" iconColor={theme.colors.onBackground} onPress={() => router.back()} />
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+                        <Ionicons name="arrow-back" size={22} color={theme.colors.onBackground} />
+                    </TouchableOpacity>
                 </View>
                 <View style={styles.center}>
                     <Text variant="titleLarge" style={{ color: theme.colors.onSurface }}>Journal entry not found.</Text>
@@ -211,224 +214,173 @@ export default function JournalDetailScreen() {
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <MovingZenBackground />
-
+            {/* Top nav bar: back + edit + delete */}
             <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-                <IconButton icon="arrow-left" iconColor={theme.colors.onBackground} onPress={() => router.back()} />
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
+                    <Ionicons name="arrow-back" size={22} color={theme.colors.onBackground} />
+                </TouchableOpacity>
                 <Text variant="titleMedium" style={{ color: theme.colors.onBackground, fontWeight: '700' }}>
                     Entry
                 </Text>
                 <View style={styles.headerActions}>
-                    <Surface style={[styles.actionChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.58)' }]} elevation={0}>
-                        <IconButton
-                            icon="pencil-outline"
-                            iconColor={theme.colors.primary}
-                            size={22}
-                            onPress={() => router.push({ pathname: '/(tabs)/journal/create', params: { date: entryId } })}
-                            style={styles.actionIcon}
-                        />
-                    </Surface>
-                    <Surface style={[styles.actionChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.58)' }]} elevation={0}>
-                        <IconButton
-                            icon="trash-can-outline"
-                            iconColor="#FF8C6B"
-                            size={22}
-                            onPress={handleDelete}
-                            style={[styles.actionIcon, styles.deleteIcon]}
-                        />
-                    </Surface>
+                    <TouchableOpacity
+                        style={[styles.actionChip, { backgroundColor: isDark ? ef.bg3 : ef.bg2 }]}
+                        onPress={() => router.push({ pathname: '/(tabs)/journal/create', params: { date: entryId } })}
+                    >
+                        <Ionicons name="pencil-outline" size={20} color={theme.colors.primary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.actionChip, { backgroundColor: isDark ? ef.bg_red : ef.bg_red }]}
+                        onPress={handleDelete}
+                    >
+                        <Ionicons name="trash-outline" size={20} color={ef.red} />
+                    </TouchableOpacity>
                 </View>
             </View>
 
-            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 140 }]}>
-                <Surface style={[styles.hero, { backgroundColor: 'transparent', borderColor: palette.glassBorder }]} elevation={0}>
-                    <BlurView intensity={isDark ? 16 : 32} tint={isDark ? 'dark' : 'light'} style={[StyleSheet.absoluteFill, styles.surfaceFill]} />
-                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.surfaceFill, { backgroundColor: palette.glass }]} />
-                    <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
+            <ScrollView
+                contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 60 }]}
+                showsVerticalScrollIndicator={false}
+            >
+                {/* Hero block: date + title + word count */}
+                <View style={[styles.hero, { backgroundColor: isDark ? ef.bg1 : ef.bg0, borderColor: isDark ? ef.bg4 : ef.bg3 }]}>
+                    <Text variant="labelSmall" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9 }}>
                         {friendlyDate}
                     </Text>
-                    <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 6, fontWeight: '600' }}>
+                    <Text variant="headlineSmall" style={{ color: theme.colors.onSurface, marginTop: 6, fontWeight: '700' }}>
                         {title.trim() ? title : 'Untitled entry'}
                     </Text>
-                    <View style={styles.heroMetaRow}>
-                        <Surface style={[styles.metaChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.58)' }]} elevation={0}>
-                            <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                {content.trim() ? `${content.trim().split(/\s+/).length} words` : 'Empty entry'}
-                            </Text>
-                        </Surface>
+                    <View style={[styles.metaChip, { backgroundColor: isDark ? ef.bg3 : ef.bg2, alignSelf: 'flex-start', marginTop: 10 }]}>
+                        <Text variant="labelSmall" style={{ color: isDark ? ef.grey1 : ef.grey2 }}>
+                            {content.trim() ? `${content.trim().split(/\s+/).length} words` : 'Empty entry'}
+                        </Text>
                     </View>
-                </Surface>
+                </View>
 
-                <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder, backgroundColor: 'transparent' }]}>
-                    <BlurView intensity={isDark ? 14 : 28} tint={isDark ? 'dark' : 'light'} style={[StyleSheet.absoluteFill, styles.surfaceFill]} />
-                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.surfaceFill, { backgroundColor: palette.glass }]} />
-                    <Card.Content style={{ paddingVertical: 16, paddingHorizontal: 14 }}>
-                        <Text variant="bodySmall" style={{ color: theme.colors.primary, marginBottom: 8, letterSpacing: 0.7, textTransform: 'uppercase' }}>
-                            Journal text
-                        </Text>
-                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, lineHeight: 24 }}>
-                            {content || 'No text saved for this date yet.'}
-                        </Text>
-                    </Card.Content>
-                </Card>
+                {/* Journal body text */}
+                <View style={[styles.card, { backgroundColor: isDark ? ef.bg1 : ef.bg0, borderColor: isDark ? ef.bg4 : ef.bg3 }]}>
+                    <Text variant="labelSmall" style={{ color: theme.colors.primary, marginBottom: 10, letterSpacing: 0.7, textTransform: 'uppercase' }}>
+                        Journal text
+                    </Text>
+                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurface, lineHeight: 24 }}>
+                        {content || 'No text saved for this date yet.'}
+                    </Text>
+                </View>
 
-                <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder, backgroundColor: 'transparent', marginTop: 12 }]}>
-                    <BlurView intensity={isDark ? 14 : 28} tint={isDark ? 'dark' : 'light'} style={[StyleSheet.absoluteFill, styles.surfaceFill]} />
-                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.surfaceFill, { backgroundColor: palette.glass }]} />
-                    <Card.Content style={{ paddingVertical: 16, paddingHorizontal: 14 }}>
-                        <Text variant="bodySmall" style={{ color: theme.colors.primary, marginBottom: 8, letterSpacing: 0.7, textTransform: 'uppercase' }}>
-                            Journal analysis
-                        </Text>
+                {/* AI analysis card */}
+                <View style={[styles.card, { backgroundColor: isDark ? ef.bg1 : ef.bg0, borderColor: isDark ? ef.bg4 : ef.bg3, marginTop: 12 }]}>
+                    <Text variant="labelSmall" style={{ color: theme.colors.primary, marginBottom: 10, letterSpacing: 0.7, textTransform: 'uppercase' }}>
+                        Journal analysis
+                    </Text>
 
-                        {analysisLoading ? (
-                            <View style={styles.analysisLoadingRow}>
-                                <ActivityIndicator size="small" color={theme.colors.primary} />
-                                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginLeft: 10 }}>
-                                    Analyzing your entry...
-                                </Text>
-                            </View>
-                        ) : analysisError ? (
-                            <View style={styles.analysisErrorCard}>
-                                <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
-                                    Keep wearing your watch
-                                </Text>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 6, lineHeight: 20 }}>
-                                    {analysisError}
-                                </Text>
-                            </View>
-                        ) : analysisResult ? (
-                            <View style={styles.analysisResultWrap}>
-                                <Surface style={[styles.scoreBadge, { backgroundColor: theme.colors.primary }]} elevation={0}>
-                                    <Text variant="titleMedium" style={{ color: theme.colors.onPrimary, fontWeight: '800' }}>
-                                        {analysisResult.moodScore}/5
-                                    </Text>
-                                </Surface>
-
-                                <View style={styles.themeWrap}>
-                                    {analysisResult.themes.length > 0 ? (
-                                        analysisResult.themes.map((themeName) => (
-                                            <Surface key={themeName} style={[styles.themeChip, { backgroundColor: palette.glass }]} elevation={0}>
-                                                <Text variant="labelSmall" style={{ color: theme.colors.onSurface }}>
-                                                    {themeName}
-                                                </Text>
-                                            </Surface>
-                                        ))
-                                    ) : (
-                                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant }}>
-                                            No dominant themes were detected.
-                                        </Text>
-                                    )}
-                                </View>
-                            </View>
-                        ) : (
-                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, lineHeight: 20 }}>
-                                No journal text available to analyze.
+                    {analysisLoading ? (
+                        <View style={styles.analysisLoadingRow}>
+                            <ActivityIndicator size="small" color={theme.colors.primary} />
+                            <Text variant="bodyMedium" style={{ color: isDark ? ef.grey1 : ef.grey2, marginLeft: 10 }}>
+                                Analyzing your entry…
                             </Text>
-                        )}
-                    </Card.Content>
-                </Card>
-
+                        </View>
+                    ) : analysisError ? (
+                        <View style={[styles.analysisErrorCard, { backgroundColor: isDark ? ef.bg2 : ef.bg2 }]}>
+                            <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
+                                Keep wearing your watch
+                            </Text>
+                            <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 6, lineHeight: 20 }}>
+                                {analysisError}
+                            </Text>
+                        </View>
+                    ) : analysisResult ? (
+                        <View style={styles.analysisResultWrap}>
+                            <View style={[styles.scoreBadge, { backgroundColor: theme.colors.primary }]}>
+                                <Text variant="titleMedium" style={{ color: theme.colors.onPrimary, fontWeight: '800' }}>
+                                    {analysisResult.moodScore}/5
+                                </Text>
+                            </View>
+                            <View style={styles.themeWrap}>
+                                {analysisResult.themes.length > 0 ? (
+                                    analysisResult.themes.map((themeName) => (
+                                        <View key={themeName} style={[styles.themeChip, { backgroundColor: isDark ? ef.bg3 : ef.bg2 }]}>
+                                            <Text variant="labelSmall" style={{ color: theme.colors.onSurface }}>
+                                                {themeName}
+                                            </Text>
+                                        </View>
+                                    ))
+                                ) : (
+                                    <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2 }}>
+                                        No dominant themes detected.
+                                    </Text>
+                                )}
+                            </View>
+                        </View>
+                    ) : (
+                        <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2, lineHeight: 20 }}>
+                            No journal text available to analyze.
+                        </Text>
+                    )}
+                </View>
             </ScrollView>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
+    container: { flex: 1 },
+
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 8,
+        paddingHorizontal: 12,
         paddingBottom: 6,
     },
-    headerSpacer: {
-        width: 40,
+    backBtn: {
+        width: 38,
+        height: 38,
+        alignItems: 'center',
+        justifyContent: 'center',
     },
     headerActions: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-        marginRight: 0,
+        gap: 8,
     },
     actionChip: {
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
         alignItems: 'center',
         justifyContent: 'center',
-        overflow: 'hidden',
     },
-    actionIcon: {
-        margin: 0,
-    },
-    deleteIcon: {
-        marginLeft: 3,
-        marginTop: 0,
-    },
-    surfaceFill: {
-        borderRadius: 16,
-    },
+
     content: {
         paddingHorizontal: 16,
-        paddingTop: 10,
+        paddingTop: 8,
     },
+
     hero: {
         borderRadius: 16,
-        padding: 12,
-        borderWidth: 0.8,
+        padding: 16,
+        borderWidth: StyleSheet.hairlineWidth,
         marginBottom: 12,
-        overflow: 'hidden',
-    },
-    heroMetaRow: {
-        marginTop: 10,
-        flexDirection: 'row',
     },
     metaChip: {
         borderRadius: 999,
         paddingHorizontal: 10,
         paddingVertical: 6,
     },
+
     card: {
         borderRadius: 16,
-        borderWidth: 0.8,
-        overflow: 'hidden',
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 16,
     },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    analysisLoadingRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingVertical: 6,
-    },
-    analysisErrorCard: {
-        borderRadius: 14,
-        paddingHorizontal: 12,
-        paddingVertical: 12,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    analysisResultWrap: {
-        gap: 12,
-    },
-    scoreBadge: {
-        alignSelf: 'flex-start',
-        borderRadius: 999,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-    },
-    themeWrap: {
-        flexDirection: 'row',
-        flexWrap: 'wrap',
-        gap: 8,
-    },
-    themeChip: {
-        borderRadius: 999,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
+
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+    analysisLoadingRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
+    analysisErrorCard: { borderRadius: 12, padding: 12 },
+    analysisResultWrap: { gap: 12 },
+    scoreBadge: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+    themeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    themeChip: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
 });

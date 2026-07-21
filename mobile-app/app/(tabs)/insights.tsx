@@ -1,13 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
-import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
+import { ActivityIndicator, ScrollView, StyleSheet, View, RefreshControl, Pressable } from 'react-native';
+import { Card, Chip, Surface, Text, useTheme, TouchableRipple } from 'react-native-paper';
+import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../providers/app-theme-provider';
+import { EverforestLight, EverforestDark } from '../../constants/theme';
 import { ZEN_PALETTE } from '../../constants/zen-ui';
-import { MovingZenBackground } from '../../components/moving-zen-background';
 import { MindfulAPI } from '../../services/mindfulApi';
+import React, { useCallback, useEffect, useState } from 'react';
 
 const DEMO_USERS = Array.from({ length: 16 }, (_, index) => `p${String(index + 1).padStart(2, '0')}`);
 
@@ -26,15 +26,14 @@ function InsightCard({
     const { isDark } = useAppTheme();
     const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
 
+    const ef = isDark ? EverforestDark : EverforestLight;
     return (
-        <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder }]}>
-            <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
+        <Card mode="contained" style={[styles.card, { backgroundColor: isDark ? ef.bg1 : ef.bg0, borderColor: isDark ? ef.bg4 : ef.bg3, borderWidth: StyleSheet.hairlineWidth }]}>
             <Card.Content style={styles.cardContent}>
                 <View style={styles.cardTop}>
-                    <Surface style={[styles.iconBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.5)' }]} elevation={0}>
+                    <View style={[styles.iconBubble, { backgroundColor: isDark ? ef.bg3 : ef.bg2 }]}>
                         <Ionicons name={icon} size={20} color={theme.colors.primary} />
-                    </Surface>
+                    </View>
                     <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
                         {title}
                     </Text>
@@ -54,111 +53,149 @@ export default function InsightsScreen() {
     const theme = useTheme();
     const { isDark } = useAppTheme();
     const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
+    const router = useRouter();
     const insets = useSafeAreaInsets();
     const [activeUser, setActiveUser] = useState('p01');
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
+    const [showResearchMode, setShowResearchMode] = useState(false);
     const [topFeature, setTopFeature] = useState('--');
     const [insightMessage, setInsightMessage] = useState('--');
     const [topFeatureImpact, setTopFeatureImpact] = useState<number | null>(null);
     const [dataDaysUsed, setDataDaysUsed] = useState<number | null>(null);
     const [latestFeatureValues, setLatestFeatureValues] = useState<{ key: string; value: number }[]>([]);
     const [featureImportances, setFeatureImportances] = useState<{ feature: string; impact_percent: number }[]>([]);
+    const [modelInfo, setModelInfo] = useState<any>(null);
+
+    const loadData = useCallback(async (isRefresh = false) => {
+        if (!isRefresh) setLoading(true);
+        setErrorMessage(null);
+
+        try {
+            const [insightRes, modelInfoRes] = await Promise.all([
+                MindfulAPI.getInsight(activeUser),
+                MindfulAPI.getModelInfo(activeUser).catch(() => null)
+            ]);
+
+            if (insightRes.status === 'success') {
+                setTopFeature(insightRes.data.top_feature || '--');
+                setInsightMessage(insightRes.data.insight_message || '--');
+                setTopFeatureImpact(insightRes.data.top_feature_impact_percent ?? null);
+                setDataDaysUsed(insightRes.data.data_days_used ?? null);
+                setLatestFeatureValues(
+                    Object.entries(insightRes.data.latest_feature_values || {}).map(([key, value]) => ({ key, value: value as number }))
+                );
+                setFeatureImportances(insightRes.data.feature_importances || []);
+                setModelInfo(modelInfoRes?.status === 'success' ? modelInfoRes : null);
+            } else {
+                throw new Error(insightRes.message || 'No insight available right now.');
+            }
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Keep wearing your watch. The insight model needs more data.';
+            setErrorMessage(message);
+            setTopFeature('--');
+            setInsightMessage('--');
+            setTopFeatureImpact(null);
+            setDataDaysUsed(null);
+            setLatestFeatureValues([]);
+            setFeatureImportances([]);
+            setModelInfo(null);
+        } finally {
+            if (!isRefresh) setLoading(false);
+        }
+    }, [activeUser]);
 
     useEffect(() => {
-        let cancelled = false;
+        loadData();
+    }, [loadData]);
 
-        const loadInsight = async () => {
-            setLoading(true);
-            setErrorMessage(null);
-
-            try {
-                const response = await MindfulAPI.getInsight(activeUser);
-                if (cancelled) {
-                    return;
-                }
-
-                if (response.status === 'success') {
-                    setTopFeature(response.data.top_feature || '--');
-                    setInsightMessage(response.data.insight_message || '--');
-                    setTopFeatureImpact(response.data.top_feature_impact_percent ?? null);
-                    setDataDaysUsed(response.data.data_days_used ?? null);
-                    setLatestFeatureValues(
-                        Object.entries(response.data.latest_feature_values || {}).map(([key, value]) => ({ key, value }))
-                    );
-                    setFeatureImportances(response.data.feature_importances || []);
-                } else {
-                    throw new Error(response.message || 'No insight available right now.');
-                }
-            } catch (error) {
-                if (cancelled) {
-                    return;
-                }
-
-                const message = error instanceof Error ? error.message : 'Keep wearing your watch. The insight model needs more data.';
-                setErrorMessage(message);
-                setTopFeature('--');
-                setInsightMessage('--');
-                setTopFeatureImpact(null);
-                setDataDaysUsed(null);
-                setLatestFeatureValues([]);
-                setFeatureImportances([]);
-            } finally {
-                if (!cancelled) {
-                    setLoading(false);
-                }
-            }
-        };
-
-        loadInsight();
-
-        return () => {
-            cancelled = true;
-        };
-    }, [activeUser]);
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        await loadData(true);
+        setRefreshing(false);
+    }, [loadData]);
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <MovingZenBackground />
 
-            <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 150 }]} showsVerticalScrollIndicator={false}>
-                <Text variant="labelLarge" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 1.4 }}>
-                    Perspective
-                </Text>
-                <Text variant="headlineMedium" style={{ color: theme.colors.onBackground, fontWeight: '800', marginTop: 6 }}>
-                    Journal Insights
-                </Text>
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8, marginBottom: 20 }}>
-                    Your mood patterns and wellness themes appear here.
-                </Text>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.switcherRow} style={styles.switcherScroll}>
-                    {DEMO_USERS.map((user) => {
-                        const selected = user === activeUser;
-                        return (
-                            <Chip
-                                key={user}
-                                compact
-                                selected={selected}
-                                onPress={() => setActiveUser(user)}
-                                style={[
-                                    styles.userChip,
-                                    {
-                                        backgroundColor: selected ? theme.colors.primary : palette.glass,
-                                        borderColor: selected ? 'transparent' : palette.glassBorder,
-                                    },
-                                ]}
-                                textStyle={{ color: selected ? theme.colors.onPrimary : theme.colors.onSurface }}
+            <ScrollView 
+                contentContainerStyle={[styles.content, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 150 }]} 
+                showsVerticalScrollIndicator={false}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+            >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                        <Text variant="labelLarge" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+                            Perspective
+                        </Text>
+                        <Pressable onPress={() => setShowResearchMode(!showResearchMode)} style={{ marginTop: 6 }}>
+                            <Text 
+                                variant="headlineMedium" 
+                                style={{ color: theme.colors.onBackground, fontWeight: '800' }}
+                                suppressHighlighting={true}
                             >
-                                {user.toUpperCase()}
-                            </Chip>
-                        );
-                    })}
-                </ScrollView>
+                                Journal Insights
+                            </Text>
+                        </Pressable>
+                        <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                            Your mood patterns and wellness themes appear here.
+                        </Text>
+                    </View>
+                </View>
+                
+                {modelInfo && !loading && !errorMessage && (
+                    <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder, marginBottom: 20 }]}>
+                        
+                        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} />
+                        <Card.Content style={styles.cardContent}>
+                            <View style={styles.cardTop}>
+                                <Surface style={[styles.iconBubble, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.5)' }]} elevation={0}>
+                                    <Ionicons name="server-outline" size={20} color={theme.colors.primary} />
+                                </Surface>
+                                <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
+                                    Model Info
+                                </Text>
+                            </View>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
+                                Algorithm: <Text style={{fontWeight: '700'}}>{modelInfo.data?.algorithm || modelInfo.algorithm}</Text>
+                            </Text>
+                            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+                                Last Trained: <Text style={{fontWeight: '700'}}>{modelInfo.data?.last_trained_human || modelInfo.last_trained_human}</Text>
+                            </Text>
+                        </Card.Content>
+                    </Card>
+                )}
+
+                {showResearchMode && (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.switcherRow} style={styles.switcherScroll}>
+                        {DEMO_USERS.map((user) => {
+                            const selected = user === activeUser;
+                            return (
+                                <Chip
+                                    key={user}
+                                    compact
+                                    selected={selected}
+                                    onPress={() => setActiveUser(user)}
+                                    style={[
+                                        styles.userChip,
+                                        {
+                                            backgroundColor: selected ? theme.colors.primary : palette.glass,
+                                            borderColor: selected ? 'transparent' : palette.glassBorder,
+                                        },
+                                    ]}
+                                    textStyle={{ color: selected ? theme.colors.onPrimary : theme.colors.onSurface }}
+                                >
+                                    {user.toUpperCase()}
+                                </Chip>
+                            );
+                        })}
+                    </ScrollView>
+                )}
 
                 <Card mode="contained" style={[styles.summaryCard, { borderColor: palette.glassBorder }]}>
-                    <BlurView intensity={isDark ? 22 : 46} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
+                    
+                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} />
                     <Card.Content style={styles.summaryContent}>
                         <View style={styles.summaryHeader}>
                             <Surface style={[styles.summaryIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.5)' }]} elevation={0}>
@@ -212,8 +249,8 @@ export default function InsightsScreen() {
 
                 {!loading && !errorMessage ? (
                     <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder }]}>
-                        <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-                        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
+                        
+                        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} />
                         <Card.Content style={styles.cardContent}>
                             <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
                                 Model Input Snapshot {dataDaysUsed ? `(Days used: ${dataDaysUsed})` : ''}
@@ -242,8 +279,8 @@ export default function InsightsScreen() {
 
                 {!loading && !errorMessage ? (
                     <Card mode="contained" style={[styles.card, { borderColor: palette.glassBorder }]}>
-                        <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-                        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
+                        
+                        <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'transparent' }]} />
                         <Card.Content style={styles.cardContent}>
                             <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 0.9, fontSize: 11 }}>
                                 Feature Importances

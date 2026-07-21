@@ -4,6 +4,10 @@
     "slug": "mindful-momentum",
     "version": "1.0.0",
     "scheme": "healthdash",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#09090b",
+    "primaryColor": "#5DE4C7",
     "android": {
       "package": "com.hpsin.healthdash",
       "permissions": [
@@ -23,7 +27,8 @@
         "expo-build-properties",
         {
           "android": {
-            "minSdkVersion": 26
+            "minSdkVersion": 26,
+            "usesCleartextTraffic": true
           }
         }
       ],

@@ -5,37 +5,95 @@
 
 import { Platform } from 'react-native';
 
-const tintColorLight = '#0a7ea4';
-const tintColorDark = '#fff';
+const tintColorLight = '#3A94C5'; // blue
+const tintColorDark = '#7FBBB3'; // blue
+
+export const EverforestLight = {
+  bg_dim: '#F2EFDF',
+  bg0: '#FFFBEF',
+  bg1: '#F8F5E4',
+  bg2: '#F2EFDF',
+  bg3: '#EDEADA',
+  bg4: '#E8E5D5',
+  bg5: '#BEC5B2',
+  fg: '#5C6A72',
+  bg_red: '#FFE7DE',
+  bg_green: '#F3F5D9',
+  bg_blue: '#ECF5ED',
+  bg_purple: '#FCECED',
+  bg_yellow: '#FEF2D5',
+  bg_visual: '#F0F2D4',
+  red: '#F85552',
+  yellow: '#DFA000',
+  green: '#8DA101',
+  blue: '#3A94C5',
+  purple: '#DF69BA',
+  aqua: '#35A77C',
+  orange: '#F57D26',
+  grey0: '#A6B0A0',
+  grey1: '#939F91',
+  grey2: '#829181',
+  statusline1: '#93B259',
+  statusline2: '#708089',
+  statusline3: '#E66868',
+};
+
+export const EverforestDark = {
+  bg_dim: '#1E2326',
+  bg0: '#272E33',
+  bg1: '#2E383C',
+  bg2: '#374145',
+  bg3: '#414B50',
+  bg4: '#495156',
+  bg5: '#4F5B58',
+  fg: '#D3C6AA',
+  bg_red: '#493B40',
+  bg_green: '#3C4841',
+  bg_blue: '#384B55',
+  bg_purple: '#463F48',
+  bg_yellow: '#45443C',
+  bg_visual: '#4C3743',
+  red: '#E67E80',
+  yellow: '#DBBC7F',
+  green: '#A7C080',
+  blue: '#7FBBB3',
+  purple: '#D699B6',
+  aqua: '#83C092',
+  orange: '#E69875',
+  grey0: '#7A8478',
+  grey1: '#859289',
+  grey2: '#9DA9A0',
+  statusline1: '#A7C080',
+  statusline2: '#D3C6AA',
+  statusline3: '#E67E80',
+};
 
 export const Colors = {
   light: {
-    text: '#11181C',
-    background: '#fff',
+    text: EverforestLight.fg,
+    background: EverforestLight.bg_dim,
     tint: tintColorLight,
-    icon: '#687076',
-    tabIconDefault: '#687076',
+    icon: EverforestLight.grey1,
+    tabIconDefault: EverforestLight.grey1,
     tabIconSelected: tintColorLight,
+    ...EverforestLight,
   },
   dark: {
-    text: '#ECEDEE',
-    background: '#151718',
+    text: EverforestDark.fg,
+    background: EverforestDark.bg_dim,
     tint: tintColorDark,
-    icon: '#9BA1A6',
-    tabIconDefault: '#9BA1A6',
+    icon: EverforestDark.grey1,
+    tabIconDefault: EverforestDark.grey1,
     tabIconSelected: tintColorDark,
+    ...EverforestDark,
   },
 };
 
 export const Fonts = Platform.select({
   ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
     sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
     serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
     rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
     mono: 'ui-monospace',
   },
   default: {

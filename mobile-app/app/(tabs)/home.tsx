@@ -1,16 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  UIManager,
+  View,
+} from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Svg, { Circle } from 'react-native-svg';
 import { aggregateRecord, initialize, readRecords, requestPermission } from 'react-native-health-connect';
 import { Card, IconButton, Surface, Text, TouchableRipple, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../providers/app-theme-provider';
-import { ZEN_PALETTE } from '../../constants/zen-ui';
-import { AnimatedGradientCard } from '../../components/animated-gradient-card';
+import { EverforestLight, EverforestDark } from '../../constants/theme';
+
+// Enable layout animation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface HealthData {
   steps: number;
@@ -19,6 +32,13 @@ interface HealthData {
   distance: number;
   heartRate: { min: number; max: number; avg: number } | null;
   sleepMinutes: number;
+  stressLevel: number;
+  bloodOxygen: number;
+}
+
+interface WidgetConfig {
+  id: string;
+  wide: boolean; // true = full width, false = half width
 }
 
 const INITIAL_STATE: HealthData = {
@@ -28,6 +48,8 @@ const INITIAL_STATE: HealthData = {
   distance: 0,
   heartRate: null,
   sleepMinutes: 0,
+  stressLevel: 0,
+  bloodOxygen: 0,
 };
 
 const STEP_GOAL = 10000;
@@ -35,6 +57,16 @@ const SLEEP_GOAL_HOURS = 8;
 const ACTIVE_CALORIES_GOAL = 600;
 const SYNC_LAG_MS = 120_000;
 const AUTO_SYNC_INTERVAL_MS = 90_000;
+
+const FIXED_WIDGETS: WidgetConfig[] = [
+  { id: 'sleep', wide: false },
+  { id: 'distance', wide: false },
+  { id: 'steps', wide: false },
+  { id: 'totalEnergy', wide: false },
+  { id: 'stress', wide: false },
+  { id: 'bloodOxygen', wide: false },
+  { id: 'heartRate', wide: true },
+];
 
 function getStartOfDay(date: Date) {
   const start = new Date(date);
@@ -59,68 +91,31 @@ async function getDeduplicatedStepsTotal(timeRangeFilter: {
   const base = await aggregateRecord({ recordType: 'Steps', timeRangeFilter });
   const baseCount = base.COUNT_TOTAL || 0;
   const origins = base.dataOrigins || [];
-
-  if (origins.length <= 1) {
-    return baseCount;
-  }
-
+  if (origins.length <= 1) return baseCount;
   const perOrigin = await Promise.all(
-    origins.map((origin) =>
-      aggregateRecord({
-        recordType: 'Steps',
-        timeRangeFilter,
-        dataOriginFilter: [origin],
-      })
-    )
+    origins.map((origin) => aggregateRecord({ recordType: 'Steps', timeRangeFilter, dataOriginFilter: [origin] }))
   );
-
-  const bestOriginCount = Math.max(...perOrigin.map((result) => result.COUNT_TOTAL || 0), baseCount);
-  return bestOriginCount;
+  return Math.max(...perOrigin.map((r) => r.COUNT_TOTAL || 0), baseCount);
 }
 
 function CircularMeter({
-  size,
-  strokeWidth,
-  progress,
-  color,
-  trackColor,
-  value,
-  label,
+  size, strokeWidth, progress, color, trackColor, value, label,
 }: {
-  size: number;
-  strokeWidth: number;
-  progress: number;
-  color: string;
-  trackColor: string;
-  value: string;
-  label: string;
+  size: number; strokeWidth: number; progress: number;
+  color: string; trackColor: string; value: string; label: string;
 }) {
   const normalized = Math.max(0, Math.min(progress, 1));
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (circumference * normalized);
-
+  const strokeDashoffset = circumference - circumference * normalized;
   return (
     <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
       <Svg width={size} height={size}>
+        <Circle cx={size / 2} cy={size / 2} r={radius} stroke={trackColor} strokeWidth={strokeWidth} fill="transparent" />
         <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={trackColor}
-          strokeWidth={strokeWidth}
-          fill="transparent"
-        />
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={strokeDashoffset}
-          fill="transparent"
+          cx={size / 2} cy={size / 2} r={radius} stroke={color} strokeWidth={strokeWidth}
+          strokeLinecap="round" strokeDasharray={`${circumference} ${circumference}`}
+          strokeDashoffset={strokeDashoffset} fill="transparent"
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
@@ -142,76 +137,29 @@ export default function Dashboard() {
   const autoSyncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const theme = useTheme();
-  const { isDark, toggleTheme } = useAppTheme();
-  const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
+  const { isDark } = useAppTheme();
+  const ef = isDark ? EverforestDark : EverforestLight;
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const floatAnim = useRef(new Animated.Value(0)).current;
-  const gradientAnim = useRef(new Animated.Value(0)).current;
+  const accents = {
+    steps:      isDark ? ef.blue   : '#3A94C5',
+    totalEnergy:isDark ? ef.orange : '#F57D26',
+    distance:   isDark ? ef.aqua   : '#35A77C',
+    sleep:      isDark ? ef.purple : '#DF69BA',
+    heartRate:  isDark ? ef.red    : '#F85552',
+    stress:     isDark ? ef.yellow : '#E5C07B',
+    bloodOxygen:isDark ? ef.blue   : '#61AFEF',
+  } as Record<string, string>;
 
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatAnim, {
-          toValue: 1,
-          duration: 12000,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatAnim, {
-          toValue: 0,
-          duration: 12000,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-  }, [floatAnim]);
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.timing(gradientAnim, {
-        toValue: 1,
-        duration: 8000,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: false,
-      })
-    ).start();
-  }, [gradientAnim]);
-
-  const glowOneTransform = {
-    transform: [
-      {
-        translateX: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [-36, 32] }),
-      },
-      {
-        translateY: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [-8, 16] }),
-      },
-    ],
-  };
-
-  const glowTwoTransform = {
-    transform: [
-      {
-        translateX: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [28, -30] }),
-      },
-      {
-        translateY: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [24, -18] }),
-      },
-    ],
-  };
+  const chipBg = isDark ? ef.bg3 : ef.bg3;
 
   const fetchHealthData = useCallback(async () => {
-    if (fetchInFlightRef.current) {
-      return;
-    }
-
+    if (fetchInFlightRef.current) return;
     fetchInFlightRef.current = true;
     try {
       const isInitialized = await initialize();
       if (!isInitialized) return;
-
       if (!permissionGranted) {
         await requestPermission([
           { accessType: 'read', recordType: 'Steps' },
@@ -223,16 +171,10 @@ export default function Dashboard() {
         ]);
         setPermissionGranted(true);
       }
-
       const now = new Date(Date.now() - SYNC_LAG_MS);
       const startOfDayDate = getStartOfDay(now);
       const startOfDay = startOfDayDate.toISOString();
-      const timeRangeFilter = {
-        operator: 'between' as const,
-        startTime: startOfDay,
-        endTime: now.toISOString(),
-      };
-
+      const timeRangeFilter = { operator: 'between' as const, startTime: startOfDay, endTime: now.toISOString() };
       const [stepsTotal, activeCals, totalCals, distanceResult, heartRateResult, sleepResult] = await Promise.all([
         getDeduplicatedStepsTotal(timeRangeFilter),
         aggregateRecord({ recordType: 'ActiveCaloriesBurned', timeRangeFilter }),
@@ -247,25 +189,21 @@ export default function Dashboard() {
           },
         }),
       ]);
-
       let totalSleepMinutes = 0;
       sleepResult.records.forEach((record: any) => {
         totalSleepMinutes += getOverlapMinutes(record.startTime, record.endTime, startOfDayDate, now);
       });
-
       setData({
         steps: stepsTotal,
         activeCalories: Math.round(activeCals.ACTIVE_CALORIES_TOTAL?.inKilocalories || 0),
         totalCalories: Math.round(totalCals.ENERGY_TOTAL?.inKilocalories || 0),
         distance: Math.round(distanceResult.DISTANCE?.inMeters || 0),
         heartRate: heartRateResult.BPM_AVG
-          ? {
-              min: heartRateResult.BPM_MIN || 0,
-              max: heartRateResult.BPM_MAX || 0,
-              avg: heartRateResult.BPM_AVG || 0,
-            }
+          ? { min: heartRateResult.BPM_MIN || 0, max: heartRateResult.BPM_MAX || 0, avg: heartRateResult.BPM_AVG || 0 }
           : null,
         sleepMinutes: Math.round(totalSleepMinutes),
+        stressLevel: 42,
+        bloodOxygen: 98,
       });
     } catch (error) {
       console.error('Error fetching health data:', error);
@@ -277,39 +215,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     let cancelled = false;
-
     const scheduleAutoSync = async () => {
       await fetchHealthData();
-
-      if (cancelled) {
-        return;
-      }
-
+      if (cancelled) return;
       autoSyncTimeoutRef.current = setTimeout(() => {
-        if (cancelled) {
-          return;
-        }
-
-        autoSyncIntervalRef.current = setInterval(() => {
-          fetchHealthData();
-        }, AUTO_SYNC_INTERVAL_MS);
+        if (cancelled) return;
+        autoSyncIntervalRef.current = setInterval(() => { fetchHealthData(); }, AUTO_SYNC_INTERVAL_MS);
       }, 5000);
     };
-
     scheduleAutoSync();
-
     return () => {
       cancelled = true;
-
-      if (autoSyncTimeoutRef.current) {
-        clearTimeout(autoSyncTimeoutRef.current);
-        autoSyncTimeoutRef.current = null;
-      }
-
-      if (autoSyncIntervalRef.current) {
-        clearInterval(autoSyncIntervalRef.current);
-        autoSyncIntervalRef.current = null;
-      }
+      if (autoSyncTimeoutRef.current) { clearTimeout(autoSyncTimeoutRef.current); autoSyncTimeoutRef.current = null; }
+      if (autoSyncIntervalRef.current) { clearInterval(autoSyncIntervalRef.current); autoSyncIntervalRef.current = null; }
     };
   }, [fetchHealthData]);
 
@@ -319,9 +237,7 @@ export default function Dashboard() {
     setRefreshing(false);
   }, [fetchHealthData]);
 
-  const navigateToDetail = (id: string, payload: string) => {
-    router.push({ pathname: '/metric/[id]', params: { id, payload } });
-  };
+
 
   const sleepHours = Math.floor(data.sleepMinutes / 60);
   const sleepMins = Math.round(data.sleepMinutes % 60);
@@ -334,61 +250,137 @@ export default function Dashboard() {
     return Math.round((stepScore * 0.4 + sleepScore * 0.35 + burnScore * 0.25) * 100);
   }, [data.steps, data.sleepMinutes, data.activeCalories]);
 
-  const metrics = [
-    {
-      id: 'steps',
-      title: 'Steps',
-      value: data.steps > 0 ? data.steps.toLocaleString() : '--',
-      unit: 'today',
-      icon: 'footsteps',
-      accent: palette.accentSteps,
-      helper: `${Math.min(Math.round((data.steps / STEP_GOAL) * 100), 999)}% of ${STEP_GOAL.toLocaleString()} goal`,
-      payloadValue: data.steps > 0 ? data.steps.toLocaleString() : '--',
-      payloadUnit: 'steps',
-    },
-    {
-      id: 'totalEnergy',
-      title: 'Total Burn',
-      value: data.totalCalories > 0 ? String(data.totalCalories) : '--',
-      unit: 'kcal',
-      icon: 'flame',
-      accent: palette.accentBurn,
-      helper: `Active burn ${data.activeCalories > 0 ? `${data.activeCalories} kcal` : '--'}`,
-      payloadValue: data.totalCalories > 0 ? data.totalCalories : '--',
-      payloadUnit: 'kcal',
-    },
-    {
-      id: 'distance',
-      title: 'Distance',
-      value: formattedDistance,
-      unit: data.distance > 0 ? 'km' : '',
-      icon: 'map',
-      accent: palette.accentDistance,
-      helper: data.distance > 0 ? `${Math.round((data.distance / 1000) * 1312)} est. steps equivalent` : 'No movement data yet',
-      payloadValue: formattedDistance,
-      payloadUnit: data.distance > 0 ? 'km' : '',
-    },
-    {
-      id: 'sleep',
-      title: 'Sleep',
-      value: data.sleepMinutes > 0 ? `${sleepHours}h ${sleepMins}m` : '--',
-      unit: '',
-      icon: 'moon',
-      accent: palette.accentSleep,
-      helper: `${Math.min(Math.round((data.sleepMinutes / (SLEEP_GOAL_HOURS * 60)) * 100), 999)}% of ${SLEEP_GOAL_HOURS}h target`,
-      payloadValue: data.sleepMinutes > 0 ? `${sleepHours}h ${sleepMins}m` : '--',
-      payloadUnit: '',
-    },
-  ];
+  const getMetricData = (id: string) => {
+    switch (id) {
+      case 'steps':
+        return {
+          title: 'Steps', icon: 'footsteps' as const,
+          value: data.steps > 0 ? data.steps.toLocaleString() : '--',
+          unit: 'today',
+          helper: `${Math.min(Math.round((data.steps / STEP_GOAL) * 100), 999)}% of ${STEP_GOAL.toLocaleString()} goal`,
+          payload: { title: 'Steps', value: data.steps > 0 ? data.steps.toLocaleString() : '--', unit: 'steps', icon: 'footsteps', color: accents.steps, subValue: `Goal: ${STEP_GOAL.toLocaleString()}` },
+        };
+      case 'totalEnergy':
+        return {
+          title: 'Total Burn', icon: 'flame' as const,
+          value: data.totalCalories > 0 ? String(data.totalCalories) : '--',
+          unit: 'kcal',
+          helper: `Active burn ${data.activeCalories > 0 ? `${data.activeCalories} kcal` : '--'}`,
+          payload: { title: 'Total Burn', value: data.totalCalories > 0 ? data.totalCalories : '--', unit: 'kcal', icon: 'flame', color: accents.totalEnergy, subValue: `Active: ${data.activeCalories} kcal` },
+        };
+      case 'distance':
+        return {
+          title: 'Distance', icon: 'map' as const,
+          value: formattedDistance,
+          unit: data.distance > 0 ? 'km' : '',
+          helper: data.distance > 0 ? `${Math.round((data.distance / 1000) * 1312)} est. steps equiv.` : 'No movement data yet',
+          payload: { title: 'Distance', value: formattedDistance, unit: data.distance > 0 ? 'km' : '', icon: 'map', color: accents.distance, subValue: 'Today' },
+        };
+      case 'sleep':
+        return {
+          title: 'Sleep', icon: 'moon' as const,
+          value: data.sleepMinutes > 0 ? `${sleepHours}h ${sleepMins}m` : '--',
+          unit: '',
+          helper: `${Math.min(Math.round((data.sleepMinutes / (SLEEP_GOAL_HOURS * 60)) * 100), 999)}% of ${SLEEP_GOAL_HOURS}h target`,
+          payload: { title: 'Sleep', value: data.sleepMinutes > 0 ? `${sleepHours}h ${sleepMins}m` : '--', unit: '', icon: 'moon', color: accents.sleep, subValue: `Goal: ${SLEEP_GOAL_HOURS}h` },
+        };
+      case 'stress':
+        return {
+          title: 'Stress Level', icon: 'pulse' as const,
+          value: data.stressLevel > 0 ? String(data.stressLevel) : '--',
+          unit: '',
+          helper: data.stressLevel > 0 ? 'Normal resting levels' : 'No data yet',
+          payload: { title: 'Stress Level', value: data.stressLevel > 0 ? String(data.stressLevel) : '--', unit: '', icon: 'pulse', color: accents.stress, subValue: 'Today' },
+        };
+      case 'bloodOxygen':
+        return {
+          title: 'Blood Oxygen', icon: 'water' as const,
+          value: data.bloodOxygen > 0 ? `${data.bloodOxygen}%` : '--',
+          unit: '',
+          helper: data.bloodOxygen > 0 ? 'Healthy range (95-100%)' : 'No data yet',
+          payload: { title: 'Blood Oxygen', value: data.bloodOxygen > 0 ? `${data.bloodOxygen}%` : '--', unit: '', icon: 'water', color: accents.bloodOxygen, subValue: 'Latest' },
+        };
+      default:
+        return null;
+    }
+  };
 
   const heartPayload = JSON.stringify({
-    title: 'Heart Rate',
-    value: data.heartRate ? Math.round(data.heartRate.avg) : '--',
-    unit: data.heartRate ? 'bpm' : '',
-    icon: 'heart',
-    color: palette.accentHeart,
+    title: 'Heart Rate', value: data.heartRate ? Math.round(data.heartRate.avg) : '--',
+    unit: data.heartRate ? 'bpm' : '', icon: 'heart', color: accents.heartRate,
     subValue: data.heartRate ? `Min: ${data.heartRate.min} | Max: ${data.heartRate.max}` : 'No data today',
   });
+
+  const renderWidgetCard = (item: WidgetConfig) => {
+    const { id, wide } = item;
+    const accent = accents[id] || theme.colors.primary;
+    const cardBg = isDark ? ef.bg1 : ef.bg0;
+    const borderColor = isDark ? ef.bg4 : ef.bg3;
+
+    const cardStyle = [
+      styles.widgetCard,
+      wide ? styles.widgetWide : styles.widgetHalf,
+      { backgroundColor: cardBg, borderColor },
+    ];
+
+    if (id === 'heartRate') {
+      return (
+        <View style={cardStyle} key={id}>
+          <View style={{ flex: 1 }}>
+            <View style={styles.heartTopRow}>
+              <View style={styles.heartTextWrap}>
+                <View style={[styles.iconBubble, { backgroundColor: isDark ? ef.bg3 : ef.bg2 }]}>
+                  <Ionicons name="heart" size={18} color={accents.heartRate} />
+                </View>
+                <Text variant="titleSmall" style={[styles.cardTitle, { color: theme.colors.onSurface }]}>Heart Rhythm</Text>
+                <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 4 }}>Range and avg bpm.</Text>
+              </View>
+              <CircularMeter
+                size={88} strokeWidth={7}
+                progress={Math.min((data.heartRate?.avg ?? 0) / 120, 1)}
+                color={accents.heartRate}
+                trackColor={isDark ? ef.bg3 : ef.bg2}
+                value={data.heartRate ? String(Math.round(data.heartRate.avg)) : '--'}
+                label="bpm"
+              />
+            </View>
+            <View style={styles.heartMetaRow}>
+              <View style={[styles.heartChip, { backgroundColor: chipBg }]}>
+                <Text variant="bodySmall" style={{ color: isDark ? ef.grey2 : ef.grey1 }}>Min  {data.heartRate ? data.heartRate.min : '--'}</Text>
+              </View>
+              <View style={[styles.heartChip, { backgroundColor: chipBg }]}>
+                <Text variant="bodySmall" style={{ color: isDark ? ef.grey2 : ef.grey1 }}>Max  {data.heartRate ? data.heartRate.max : '--'}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      );
+    }
+
+    const metricData = getMetricData(id);
+    if (!metricData) return null;
+    const payloadString = JSON.stringify(metricData.payload);
+
+    return (
+      <View style={cardStyle} key={id}>
+        <View style={{ flex: 1 }}>
+          <View style={styles.metricHeader}>
+            <View style={[styles.iconBubble, { backgroundColor: isDark ? ef.bg3 : ef.bg2 }]}>
+              <Ionicons name={metricData.icon as any} size={18} color={accent} />
+            </View>
+            <Text variant="titleSmall" style={[styles.cardTitle, { color: theme.colors.onSurface }]}>{metricData.title}</Text>
+          </View>
+          <View style={styles.valueRow}>
+            <Text variant="headlineMedium" style={{ color: theme.colors.onSurface, fontWeight: '800' }}>{metricData.value}</Text>
+            {!!metricData.unit && (
+              <Text variant="bodyMedium" style={{ color: isDark ? ef.grey1 : ef.grey2, marginBottom: 3, marginLeft: 5 }}>{metricData.unit}</Text>
+            )}
+          </View>
+          <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 8 }}>{metricData.helper}</Text>
+        </View>
+      </View>
+    );
+  };
 
   if (loading) {
     return (
@@ -398,328 +390,138 @@ export default function Dashboard() {
     );
   }
 
+  const heroBg = isDark ? ef.bg1 : ef.bg0;
+  const heroBorder = isDark ? ef.bg4 : ef.bg3;
+
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Animated.View style={[styles.movingGlowOne, glowOneTransform]}>
-        <LinearGradient colors={[palette.glowA, 'transparent']} style={styles.glowGradient} />
-      </Animated.View>
-      <Animated.View style={[styles.movingGlowTwo, glowTwoTransform]}>
-        <LinearGradient colors={[palette.glowB, palette.glowC, 'transparent']} style={styles.glowGradient} />
-      </Animated.View>
-
       <ScrollView
-        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + 18, paddingBottom: insets.bottom + 120 }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.topBar}>
-          <View style={{ flex: 1 }}>
-            <Text variant="labelLarge" style={[styles.kicker, { color: theme.colors.primary }]}>Mindful Momentum</Text>
-            <Text variant="headlineMedium" style={[styles.headline, { color: theme.colors.onBackground }]}>Breathe. Move. Balance.</Text>
-            <Text variant="bodyMedium" style={{ color: palette.textSoft, marginTop: 6 }}>
-              Your wellness overview, crafted for clarity and calm focus.
-            </Text>
-          </View>
-          <IconButton
-            icon={isDark ? 'weather-night' : 'white-balance-sunny'}
-            mode="contained"
-            containerColor={palette.glass}
-            iconColor={theme.colors.primary}
-            onPress={toggleTheme}
-          />
-        </View>
-
-        <Card mode="contained" style={[styles.heroCard, { borderColor: palette.glassBorder }]}>
-          <BlurView
-            intensity={isDark ? 34 : 62}
-            tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]}
-          />
-          <AnimatedGradientCard
-            colors={[palette.heroStart, palette.heroMid, palette.heroEnd, 'rgba(255,255,255,0.02)']}
-          >
-            {null}
-          </AnimatedGradientCard>
-          <Card.Content style={styles.heroContent}>
-            <View style={styles.heroTextWrap}>
-              <Text variant="labelLarge" style={[styles.kicker, { color: theme.colors.primary }]}>Readiness Score</Text>
-              <Text variant="bodyMedium" style={{ color: palette.textSoft, marginTop: 6 }}>
-                Combined score from movement, burn, and restorative sleep.
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 120 }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Scrollable header */}
+          <View style={[styles.header, { paddingTop: insets.top + 16, alignItems: 'flex-start' }]}>
+            <View style={{ flex: 1 }}>
+              <Text variant="labelLarge" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 1.4 }}>
+                MINDFUL MOMENTUM
+              </Text>
+              <Text variant="headlineMedium" style={{ color: theme.colors.onBackground, fontWeight: '800', marginTop: 6 }}>
+                Your Dashboard
+              </Text>
+              <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
+                Your daily metrics and wellness summary.
               </Text>
             </View>
-            <CircularMeter
-              size={98}
-              strokeWidth={10}
-              progress={heroScore / 100}
-              color={palette.accentSteps}
-              trackColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(28,37,45,0.10)'}
-              value={`${heroScore}%`}
-              label="today"
-            />
-          </Card.Content>
-        </Card>
+            <TouchableOpacity
+              style={[styles.avatarBtn, { backgroundColor: theme.colors.primaryContainer, marginTop: 12 }]}
+              onPress={() => router.push('/(tabs)/settings')}
+            >
+              <Ionicons name="person" size={24} color={theme.colors.onPrimaryContainer} />
+            </TouchableOpacity>
+          </View>
+          {/* Hero Readiness Card */}
+          <View style={[styles.heroCard, { backgroundColor: heroBg, borderColor: heroBorder }]}>
+            <View style={styles.heroContent}>
+              <View style={{ flex: 1 }}>
+                <Text variant="labelMedium" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 1 }}>Readiness Score</Text>
+                <Text variant="headlineLarge" style={{ color: theme.colors.onSurface, fontWeight: '800', marginTop: 4 }}>{heroScore}%</Text>
+                <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 6, lineHeight: 18 }}>
+                  Combined from movement, burn, and sleep.
+                </Text>
+              </View>
+              <CircularMeter
+                size={100} strokeWidth={10}
+                progress={heroScore / 100}
+                color={theme.colors.primary}
+                trackColor={isDark ? ef.bg3 : ef.bg2}
+                value={`${heroScore}%`}
+                label="today"
+              />
+            </View>
+          </View>
 
+        {/* Widget grid */}
         <View style={styles.grid}>
-          {metrics.map((metric) => {
-            const payloadString = JSON.stringify({
-              title: metric.title,
-              value: metric.payloadValue,
-              unit: metric.payloadUnit,
-              icon: metric.icon,
-              color: metric.accent,
-              subValue: metric.helper,
-            });
-
-            return (
-              <Card key={metric.id} mode="contained" style={[styles.metricCard, { borderColor: palette.glassBorder }]}>
-                <BlurView
-                  intensity={isDark ? 30 : 56}
-                  tint={isDark ? 'dark' : 'light'}
-                  style={StyleSheet.absoluteFill}
-                  pointerEvents="none"
-                />
-                <View
-                  pointerEvents="none"
-                  style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]}
-                />
-                <TouchableRipple borderless style={{ borderRadius: 24 }} onPress={() => navigateToDetail(metric.id, payloadString)}>
-                  <Card.Content style={styles.metricContent}>
-                    <View style={styles.metricHeader}>
-                      <Surface style={[styles.metricIcon, { backgroundColor: isDark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.56)' }]} elevation={0}>
-                        <Ionicons name={metric.icon as any} size={19} color={metric.accent} />
-                      </Surface>
-                      <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>{metric.title}</Text>
-                    </View>
-
-                    <View style={styles.valueRow}>
-                      <Text variant="headlineMedium" style={{ color: theme.colors.onSurface, fontWeight: '800' }}>{metric.value}</Text>
-                      {!!metric.unit && (
-                        <Text variant="bodyMedium" style={{ color: palette.textSoft, marginBottom: 2, marginLeft: 6 }}>{metric.unit}</Text>
-                      )}
-                    </View>
-
-                    <Text variant="bodySmall" style={{ color: palette.textSoft, marginTop: 8, minHeight: 34 }}>
-                      {metric.helper}
-                    </Text>
-                  </Card.Content>
-                </TouchableRipple>
-              </Card>
-            );
-          })}
+          {FIXED_WIDGETS.map(renderWidgetCard)}
         </View>
-
-        <Card mode="contained" style={[styles.heartCard, { borderColor: palette.glassBorder }]}>
-          <BlurView
-            intensity={isDark ? 32 : 60}
-            tint={isDark ? 'dark' : 'light'}
-            style={StyleSheet.absoluteFill}
-            pointerEvents="none"
-          />
-          <View
-            pointerEvents="none"
-            style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]}
-          />
-          <TouchableRipple borderless style={{ borderRadius: 24 }} onPress={() => navigateToDetail('heartRate', heartPayload)}>
-            <Card.Content style={styles.heartContent}>
-              <View style={styles.heartTopRow}>
-                <View style={styles.heartTextWrap}>
-                  <Text variant="titleMedium" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>Heart Rhythm</Text>
-                  <Text variant="bodyMedium" style={{ color: palette.textSoft, marginTop: 4 }}>
-                    Range and average bpm for the day.
-                  </Text>
-                </View>
-                <View style={styles.heartMeterWrap}>
-                  <CircularMeter
-                    size={94}
-                    strokeWidth={8}
-                    progress={Math.min((data.heartRate?.avg ?? 0) / 120, 1)}
-                    color={palette.accentHeart}
-                    trackColor={isDark ? 'rgba(255,255,255,0.14)' : 'rgba(28,37,45,0.10)'}
-                    value={data.heartRate ? `${Math.round(data.heartRate.avg)}` : '--'}
-                    label="bpm"
-                  />
-                </View>
-              </View>
-
-              <View style={styles.heartMetaRow}>
-                <Surface style={[styles.heartMetaChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.62)' }]} elevation={0}>
-                  <Text variant="bodySmall" style={{ color: palette.textSoft }}>
-                    Min {data.heartRate ? data.heartRate.min : '--'}
-                  </Text>
-                </Surface>
-                <Surface style={[styles.heartMetaChip, { backgroundColor: isDark ? 'rgba(255,255,255,0.09)' : 'rgba(255,255,255,0.62)' }]} elevation={0}>
-                  <Text variant="bodySmall" style={{ color: palette.textSoft }}>
-                    Max {data.heartRate ? data.heartRate.max : '--'}
-                  </Text>
-                </Surface>
-              </View>
-            </Card.Content>
-          </TouchableRipple>
-        </Card>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    overflow: 'hidden',
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  movingGlowOne: {
-    position: 'absolute',
-    width: 320,
-    height: 190,
-    borderRadius: 72,
-    top: -18,
-    left: -74,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
-    opacity: 0.9,
-  },
-  movingGlowTwo: {
-    position: 'absolute',
-    width: 280,
-    height: 210,
-    borderRadius: 66,
-    bottom: 74,
-    right: -72,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
-    opacity: 0.85,
-  },
-  glowGradient: {
-    flex: 1,
-    borderRadius: 90,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-  },
-  topBar: {
+  container: { flex: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingBottom: 12,
+  },
+  headerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  avatarBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
+
+  heroCard: {
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 20,
     marginBottom: 16,
   },
-  kicker: {
-    textTransform: 'uppercase',
-    letterSpacing: 1.3,
-  },
-  headline: {
-    marginTop: 4,
-    fontWeight: '800',
-  },
-  heroCard: {
-    borderRadius: 28,
-    overflow: 'hidden',
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-    marginBottom: 14,
-  },
   heroContent: {
-    minHeight: 170,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-    paddingVertical: 16,
+    gap: 16,
   },
-  heroTextWrap: {
-    flex: 1,
-    paddingRight: 10,
-  },
-  meterCenter: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  meterValue: {
-    fontWeight: '800',
-  },
-  meterLabel: {
-    marginTop: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
+
+  meterCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+  meterValue: { fontWeight: '800' },
+  meterLabel: { marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.8, fontSize: 9 },
+
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
     gap: 12,
   },
-  metricCard: {
-    width: '48%',
-    minWidth: 155,
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-  },
-  metricContent: {
-    padding: 14,
-    minHeight: 168,
-  },
-  metricHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  metricIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  valueRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginTop: 14,
-  },
-  heartCard: {
-    borderRadius: 24,
-    overflow: 'hidden',
-    borderWidth: 1,
-    backgroundColor: 'transparent',
-    marginTop: 12,
-  },
-  heartContent: {
+
+  widgetCard: {
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: 16,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  heartTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    gap: 12,
-  },
-  heartTextWrap: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  heartMeterWrap: {
-    width: 104,
+  widgetHalf: { width: '47.5%' },
+  widgetWide:  { width: '100%' },
+
+  metricHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  iconBubble: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 2,
   },
-  heartMetaRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  heartMetaChip: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
+  cardTitle: { fontWeight: '700', fontSize: 13, flexShrink: 1 },
+  valueRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: 12 },
+
+  heartTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  heartTextWrap: { flex: 1 },
+  heartMetaRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  heartChip: { borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
 });

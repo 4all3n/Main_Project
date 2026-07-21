@@ -1,164 +1,171 @@
+/**
+ * Journal List Screen — shows all journal entries in Everforest card style.
+ * Header scrolls with content. FAB (write button) sits above nav bar.
+ * No glassmorphism, no animated background.
+ */
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import { useFocusEffect, useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
-import { Alert, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
-import { Surface, Text, TouchableRipple, useTheme } from 'react-native-paper';
+import {
+    Alert,
+    FlatList,
+    Pressable,
+    RefreshControl,
+    StyleSheet,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../../providers/app-theme-provider';
-import { ZEN_PALETTE } from '../../../constants/zen-ui';
-import { MovingZenBackground } from '../../../components/moving-zen-background';
+import { EverforestLight, EverforestDark } from '../../../constants/theme';
 import { readJournalEntries, writeJournalEntries } from '../../../lib/journal-storage';
 
-type JournalEntry = { id: string; date: string; title?: string; content: string; createdAt: string; updatedAt: string };
+type JournalEntry = {
+    id: string;
+    date: string;
+    title?: string;
+    content: string;
+    createdAt: string;
+    updatedAt: string;
+};
 
 export default function JournalListScreen() {
     const theme = useTheme();
     const { isDark } = useAppTheme();
-    const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
+    const ef = isDark ? EverforestDark : EverforestLight;
     const insets = useSafeAreaInsets();
     const router = useRouter();
-    
-    // entries format: [{ date: '2023-10-25', content: '...' }, ...]
+
     const [entries, setEntries] = useState<JournalEntry[]>([]);
     const [refreshing, setRefreshing] = useState(false);
 
+    /** Load & sort entries by most-recently updated */
     const loadEntries = async () => {
         setRefreshing(true);
         try {
-            const entriesArray = await readJournalEntries();
-            entriesArray.sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
-            setEntries(entriesArray);
-        } catch (error) {
-            console.error('Failed to load journal entries:', error);
+            const arr = await readJournalEntries();
+            arr.sort((a, b) =>
+                new Date(b.updatedAt || b.createdAt).getTime() -
+                new Date(a.updatedAt || a.createdAt).getTime()
+            );
+            setEntries(arr);
+        } catch (e) {
+            console.error('Failed to load journal entries:', e);
         } finally {
             setRefreshing(false);
         }
     };
 
-    // Reload the list every time the user navigates back to this screen
-    useFocusEffect(
-        useCallback(() => {
-            loadEntries();
-        }, [])
-    );
+    // Reload every time screen comes into focus
+    useFocusEffect(useCallback(() => { loadEntries(); }, []));
 
-    const openEntry = (id: string) => {
+    const openEntry = (id: string) =>
         router.push({ pathname: '/(tabs)/journal/[date]', params: { date: id } });
-    };
 
-    const editEntry = (id: string) => {
+    const editEntry = (id: string) =>
         router.push({ pathname: '/(tabs)/journal/create', params: { date: id } });
-    };
 
     const deleteEntry = (id: string) => {
-        Alert.alert('Delete journal entry?', 'This will remove the entry for this date.', [
+        Alert.alert('Delete entry?', 'This cannot be undone.', [
             { text: 'Cancel', style: 'cancel' },
             {
-                text: 'Delete',
-                style: 'destructive',
+                text: 'Delete', style: 'destructive',
                 onPress: async () => {
-                    try {
-                        const currentEntries = await readJournalEntries();
-                        const nextEntries = currentEntries.filter((entry) => entry.id !== id);
-                        await writeJournalEntries(nextEntries);
-                        setEntries(nextEntries);
-                    } catch (error) {
-                        console.error('Failed to delete journal entry:', error);
-                    }
+                    const next = (await readJournalEntries()).filter(e => e.id !== id);
+                    await writeJournalEntries(next);
+                    setEntries(next);
                 },
             },
         ]);
     };
 
+    /** Individual entry card */
     const renderItem = ({ item }: { item: JournalEntry }) => {
-        // Format the date header
         const dateObj = new Date(item.date);
-        // Correct time zone shifting for ISO parsing
+        // Fix timezone offset so ISO date strings display correctly
         dateObj.setMinutes(dateObj.getMinutes() + dateObj.getTimezoneOffset());
-        
-        const friendlyDate = dateObj.toLocaleDateString('en-US', {
-            weekday: 'short', month: 'short', day: 'numeric'
-        });
-        const preview = item.content.length > 120 ? `${item.content.slice(0, 120)}...` : item.content;
+        const weekday = dateObj.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+        const monthDay = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const preview = item.content.length > 200 ? `${item.content.slice(0, 200)}…` : item.content;
 
         return (
-            <Pressable onPress={() => openEntry(item.id)} style={({ pressed }) => [{ opacity: pressed ? 0.88 : 1 }]}> 
-                <Surface style={[styles.card, { backgroundColor: 'transparent', borderColor: palette.glassBorder }]} elevation={0}>
-                    <BlurView intensity={isDark ? 20 : 40} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-                    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
-                    <View style={styles.cardContent}>
-                        <View style={styles.cardHeader}>
-                            <View>
-                                <Text variant="labelMedium" style={{ color: theme.colors.primary, letterSpacing: 0.8, textTransform: 'uppercase', fontSize: 11 }}>
-                                    {friendlyDate.split(' ')[0]}
-                                </Text>
-                                <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 4, fontWeight: '600' }}>
-                                    {item.title?.trim() ? item.title : 'Untitled entry'}
-                                </Text>
-                                <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 3 }}>
-                                    {friendlyDate.substring(friendlyDate.indexOf(' ') + 1)}
-                                </Text>
-                            </View>
-                            <Ionicons name="chevron-forward" size={16} color={theme.colors.outline} opacity={0.5} />
+            <Pressable onPress={() => openEntry(item.id)} style={({ pressed }) => [{ opacity: pressed ? 0.85 : 1 }]}>
+                <View style={[styles.card, { backgroundColor: isDark ? ef.bg1 : ef.bg0, borderColor: isDark ? ef.bg4 : ef.bg3 }]}>
+                    {/* Date + title */}
+                    <View style={styles.cardHeader}>
+                        <View style={{ flex: 1 }}>
+                            <Text variant="labelSmall" style={{ color: theme.colors.primary, letterSpacing: 0.8, textTransform: 'uppercase' }}>
+                                {weekday},
+                            </Text>
+                            <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 2, fontWeight: '700' }}>
+                                {item.title?.trim() || 'Untitled entry'}
+                            </Text>
+                            <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 2 }}>
+                                {monthDay}
+                            </Text>
                         </View>
-
-                        <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12, lineHeight: 20 }} numberOfLines={3}>
-                            {preview}
-                        </Text>
-
-                        <View style={styles.actionRow}>
-                            <TouchableRipple onPress={() => editEntry(item.id)} borderless style={styles.actionButton}>
-                                <View style={styles.actionButtonInner}>
-                                    <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
-                                    <Text variant="labelSmall" style={{ color: theme.colors.primary, marginLeft: 6 }}>Edit</Text>
-                                </View>
-                            </TouchableRipple>
-                            <TouchableRipple onPress={() => deleteEntry(item.id)} borderless style={styles.actionButton}>
-                                <View style={styles.actionButtonInner}>
-                                    <Ionicons name="trash-outline" size={14} color="#FF8C6B" />
-                                    <Text variant="labelSmall" style={{ color: '#FF8C6B', marginLeft: 6 }}>Delete</Text>
-                                </View>
-                            </TouchableRipple>
-                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={isDark ? ef.grey1 : ef.grey2} />
                     </View>
-                </Surface>
+
+                    {/* Preview text */}
+                    <Text variant="bodySmall" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 10, lineHeight: 19 }} numberOfLines={4}>
+                        {preview}
+                    </Text>
+
+                    {/* Action row */}
+                    <View style={[styles.actionRow, { borderTopColor: isDark ? ef.bg3 : ef.bg3 }]}>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: isDark ? ef.bg2 : ef.bg2 }]} onPress={() => editEntry(item.id)}>
+                            <Ionicons name="create-outline" size={14} color={theme.colors.primary} />
+                            <Text variant="labelSmall" style={{ color: theme.colors.primary, marginLeft: 6 }}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={[styles.actionBtn, { backgroundColor: isDark ? ef.bg_red : ef.bg_red }]} onPress={() => deleteEntry(item.id)}>
+                            <Ionicons name="trash-outline" size={14} color={ef.red} />
+                            <Text variant="labelSmall" style={{ color: ef.red, marginLeft: 6 }}>Delete</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
             </Pressable>
         );
     };
 
+    /** Scrollable header — rendered as FlatList ListHeaderComponent so it scrolls away */
+    const ListHeader = () => (
+        <View style={[styles.headerBlock, { paddingTop: insets.top + 20 }]}>
+            <Text variant="labelLarge" style={{ color: theme.colors.primary, letterSpacing: 1.4, textTransform: 'uppercase' }}>
+                Reflect
+            </Text>
+            <Text variant="headlineMedium" style={{ color: theme.colors.onBackground, fontWeight: '800', marginTop: 6 }}>
+                Journal History
+            </Text>
+            <Text variant="bodyMedium" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 6 }}>
+                Your daily reflections and metrics.
+            </Text>
+        </View>
+    );
+
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-            <MovingZenBackground />
-
-            <View style={[styles.headerContainer, { paddingTop: insets.top + 20 }]}> 
-                <Text variant="labelLarge" style={{ color: theme.colors.primary, letterSpacing: 1.4, textTransform: 'uppercase' }}>
-                    Reflect
-                </Text>
-                <Text variant="headlineMedium" style={{ color: theme.colors.onBackground, fontWeight: '800', marginTop: 6 }}>
-                    Journal History
-                </Text>
-                <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8 }}>
-                    Your daily reflections and metrics.
-                </Text>
-            </View>
-
             {entries.length === 0 && !refreshing ? (
-                <View style={styles.emptyContainer}>
-                    <Ionicons name="journal-outline" size={64} color={theme.colors.outline} />
-                    <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 16, fontWeight: '700' }}>
-                        No entries yet.
-                    </Text>
-                    <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8, textAlign: 'center', paddingHorizontal: 32 }}>
-                        Tap the + button below to write your first daily reflection.
-                    </Text>
-                </View>
+                <>
+                    <ListHeader />
+                    <View style={styles.emptyContainer}>
+                        <Ionicons name="journal-outline" size={60} color={isDark ? ef.grey0 : ef.grey1} />
+                        <Text variant="titleMedium" style={{ color: theme.colors.onSurface, marginTop: 16, fontWeight: '700' }}>
+                            No entries yet
+                        </Text>
+                        <Text variant="bodyMedium" style={{ color: isDark ? ef.grey1 : ef.grey2, marginTop: 8, textAlign: 'center', paddingHorizontal: 32 }}>
+                            Tap the ✏️ button below to write your first reflection.
+                        </Text>
+                    </View>
+                </>
             ) : (
                 <FlatList
                     data={entries}
-                    keyExtractor={(item) => item.id}
+                    keyExtractor={item => item.id}
                     renderItem={renderItem}
-                    contentContainerStyle={styles.listContent}
+                    ListHeaderComponent={<ListHeader />}
+                    contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 120 }]}
                     showsVerticalScrollIndicator={false}
                     refreshControl={
                         <RefreshControl refreshing={refreshing} onRefresh={loadEntries} tintColor={theme.colors.primary} />
@@ -166,85 +173,82 @@ export default function JournalListScreen() {
                 />
             )}
 
-            <Surface style={[styles.composeWrap, { borderColor: palette.glassBorder, bottom: insets.bottom + 62 }]} elevation={0}>
-                <BlurView intensity={isDark ? 24 : 44} tint={isDark ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-                <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: palette.glass }]} />
-                <TouchableRipple style={styles.composeButton} onPress={() => router.push('/(tabs)/journal/create')} borderless>
-                    <View style={[styles.composeInner, { backgroundColor: theme.colors.primary }]}> 
-                        <Ionicons name="create-outline" size={18} color={theme.colors.onPrimary} />
-                    </View>
-                </TouchableRipple>
-            </Surface>
+            {/* Write FAB — positioned higher above the tab bar */}
+            <TouchableOpacity
+                style={[styles.fab, { backgroundColor: theme.colors.primary, bottom: insets.bottom + 100 }]}
+                onPress={() => router.push('/(tabs)/journal/create')}
+                activeOpacity={0.85}
+            >
+                <Ionicons name="add" size={28} color={theme.colors.onPrimary} />
+            </TouchableOpacity>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-    },
-    headerContainer: {
+    container: { flex: 1 },
+
+    headerBlock: {
         paddingHorizontal: 20,
-        paddingBottom: 20,
+        paddingBottom: 16,
     },
+
     listContent: {
         paddingHorizontal: 16,
-        paddingBottom: 180,
     },
+
+    /** Entry card */
     card: {
         borderRadius: 18,
         marginBottom: 12,
+        borderWidth: StyleSheet.hairlineWidth,
+        padding: 16,
         overflow: 'hidden',
-        borderWidth: 0.8,
-        backgroundColor: 'transparent',
-    },
-    cardContent: {
-        padding: 14,
     },
     cardHeader: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        gap: 12,
-    },
-    actionRow: {
-        flexDirection: 'row',
-        marginTop: 14,
         gap: 8,
     },
-    actionButton: {
-        flex: 1,
-        borderRadius: 12,
-        overflow: 'hidden',
+
+    /** Edit / Delete buttons */
+    actionRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginTop: 14,
+        paddingTop: 10,
+        borderTopWidth: StyleSheet.hairlineWidth,
     },
-    actionButtonInner: {
+    actionBtn: {
+        flex: 1,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        borderRadius: 10,
     },
+
     emptyContainer: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
+        paddingBottom: 120,
     },
-    composeWrap: {
+
+    /** Floating write button */
+    fab: {
         position: 'absolute',
-        right: 24,
-        width: 56,
-        height: 56,
-        borderRadius: 999,
-        overflow: 'hidden',
-        borderWidth: 0.8,
-    },
-    composeButton: {
-        flex: 1,
-        borderRadius: 999,
-    },
-    composeInner: {
-        flex: 1,
+        right: 20,
+        width: 52,
+        height: 52,
+        borderRadius: 26,
         alignItems: 'center',
         justifyContent: 'center',
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.2,
+        shadowRadius: 4,
     },
 });

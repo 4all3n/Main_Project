@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, Text } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- NEW: Handles the Device Pill
 import { useAppTheme } from '../../providers/app-theme-provider';
@@ -11,85 +11,179 @@ const TAB_ITEMS = [
     { name: 'journal' as const, title: 'Journal', icon: 'reader-outline' as keyof typeof Ionicons.glyphMap },
 ];
 
-function TabIcon({ name, color, size, focused, activeBg }: any) {
-    if (focused) {
-        return (
-            <View style={[styles.activeIconBubble, { backgroundColor: activeBg }]}>
-                <Ionicons name={name} size={size - 2} color={color} />
-            </View>
-        );
-    }
-    return <Ionicons name={name} size={size - 2} color={color} style={{ opacity: 0.6 }} />;
-}
 
-export default function TabsLayout() {
-    const theme = useTheme();
-    const { isDark } = useAppTheme();
-    
-    // Grab the exact physical dimensions of the device's notches and pills
-    const insets = useSafeAreaInsets(); 
+
+import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../../lib/api';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { TouchableOpacity, Animated } from 'react-native';
+
+const ServerHealthPill = () => {
+    const { isDark, theme } = useAppTheme();
+    const insets = useSafeAreaInsets();
+    const [isOk, setIsOk] = useState<boolean>(true);
+
+    useEffect(() => {
+        let mounted = true;
+        const checkHealth = async () => {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                const res = await fetch(`${API_BASE_URL}/api/health`, { method: 'GET', signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (mounted) setIsOk(res.ok);
+            } catch (err) {
+                if (mounted) setIsOk(false);
+            }
+        };
+
+        checkHealth();
+        const interval = setInterval(checkHealth, 30000);
+        return () => {
+            mounted = false;
+            clearInterval(interval);
+        };
+    }, []);
 
     return (
-        <Tabs
-            screenOptions={{
-                headerShown: false,
-                tabBarActiveTintColor: theme.colors.primary,
-                tabBarInactiveTintColor: theme.colors.onSurfaceVariant,
-                tabBarShowLabel: true,
-                tabBarLabelStyle: {
-                    fontSize: 11,
-                    fontWeight: '600',
-                    marginTop: 2, // Tightened up slightly
-                },
-                tabBarHideOnKeyboard: true,
-                tabBarStyle: {
-                    // --- 1. THE COLOR FIX ---
-                    // Tie this directly to your theme's surface color so it blends seamlessly
-                    backgroundColor: theme.colors.surface, 
-                    borderTopWidth: 1,
-                    borderTopColor: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.05)',
-                    
-                    // --- 2. THE DEVICE PILL FIX ---
-                    // Dynamically calculate height and padding based on the physical device's bottom inset
-                    height: 60 + (insets.bottom > 0 ? insets.bottom : Platform.OS === 'ios' ? 20 : 10),
-                    paddingBottom: insets.bottom > 0 ? insets.bottom : Platform.OS === 'ios' ? 20 : 10,
-                    paddingTop: 8,
-                    
-                    elevation: 0, // Set to 0 so it sits flat against the background like native iOS
-                },
-                tabBarItemStyle: {
-                    padding: 2,
-                }
+        <View
+            style={{
+                position: 'absolute',
+                top: insets.top + 8,
+                right: 16,
+                backgroundColor: isDark ? 'rgba(0,0,0,0.5)' : 'rgba(255,255,255,0.8)',
+                paddingHorizontal: 8,
+                paddingVertical: 4,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                zIndex: 1000,
             }}
         >
-            {TAB_ITEMS.map((item) => (
-                <Tabs.Screen
-                    key={item.name}
-                    name={item.name}
-                    options={{
-                        title: item.title,
-                        tabBarIcon: ({ color, size, focused }) => (
-                            <TabIcon
-                                name={item.icon}
-                                size={26}
-                                color={color}
-                                focused={focused}
-                                activeBg={isDark ? 'rgba(167, 201, 237, 0.15)' : 'rgba(59, 130, 196, 0.12)'}
-                            />
-                        ),
-                    }}
-                />
-            ))}
-        </Tabs>
+            <View
+                style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: isOk ? theme.colors.primary : theme.colors.error,
+                }}
+            />
+        </View>
+    );
+};
+
+function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+    const theme = useTheme();
+    const insets = useSafeAreaInsets();
+    
+    return (
+        <View style={{
+            position: 'absolute',
+            bottom: insets.bottom + 16,
+            left: 24,
+            right: 24,
+            height: 64,
+            backgroundColor: theme.colors.surfaceVariant,
+            borderRadius: 32,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingHorizontal: 8,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 8,
+            elevation: 8,
+        }}>
+            {state.routes.map((route, index) => {
+                const { options } = descriptors[route.key];
+                const label =
+                    options.tabBarLabel !== undefined
+                        ? options.tabBarLabel
+                        : options.title !== undefined
+                        ? options.title
+                        : route.name;
+
+                const isFocused = state.index === index;
+                
+                // Skip settings from being rendered in bottom tab bar
+                if (route.name === 'settings') return null;
+
+                const onPress = () => {
+                    const event = navigation.emit({
+                        type: 'tabPress',
+                        target: route.key,
+                        canPreventDefault: true,
+                    });
+
+                    if (!isFocused && !event.defaultPrevented) {
+                        navigation.navigate(route.name, route.params);
+                    }
+                };
+
+                const iconColor = isFocused ? theme.colors.onPrimaryContainer : theme.colors.onSurfaceVariant;
+                const iconName = TAB_ITEMS.find(i => i.name === route.name)?.icon || 'home-outline';
+
+                return (
+                    <TouchableOpacity
+                        key={route.key}
+                        accessibilityRole="button"
+                        accessibilityState={isFocused ? { selected: true } : {}}
+                        accessibilityLabel={options.tabBarAccessibilityLabel}
+                        testID={options.tabBarTestID}
+                        onPress={onPress}
+                        style={{
+                            flex: 1,
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            height: 48,
+                            borderRadius: 24,
+                            backgroundColor: isFocused ? theme.colors.primaryContainer : 'transparent',
+                        }}
+                    >
+                        <Ionicons name={iconName as any} size={22} color={iconColor} />
+                        <Text style={{ 
+                            color: iconColor, 
+                            fontSize: 12, 
+                            fontWeight: isFocused ? '700' : '500', 
+                            marginTop: 2 
+                        }}>
+                            {label as string}
+                        </Text>
+                    </TouchableOpacity>
+                );
+            })}
+        </View>
     );
 }
 
-const styles = StyleSheet.create({
-    activeIconBubble: {
-        width: 56, 
-        height: 32, 
-        borderRadius: 16, 
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-});
+export default function TabsLayout() {
+    return (
+        <View style={{ flex: 1 }}>
+            <Tabs
+                tabBar={props => <CustomTabBar {...props} />}
+                screenOptions={{
+                    headerShown: false,
+                }}
+            >
+                {TAB_ITEMS.map((item) => (
+                    <Tabs.Screen
+                        key={item.name}
+                        name={item.name}
+                        options={{
+                            title: item.title,
+                        }}
+                    />
+                ))}
+                <Tabs.Screen
+                    name="settings"
+                    options={{ title: 'Settings' }}
+                />
+            </Tabs>
+            <ServerHealthPill />
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({});
