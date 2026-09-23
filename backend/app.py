@@ -19,26 +19,33 @@ from pydantic import BaseModel, field_validator
 from mindful_nlp import analyze_journal, _get_sentiment_pipe, _get_sbert
 from mindful_ml  import generate_personalized_insight, get_model_info, retrain_if_stale
 
-# ─── App startup / shutdown ────────────────────────────────────────────────────
+VALID_USER_IDS = tuple(f"p{i:02d}" for i in range(1, 17))
+
+
+def _ensure_valid_user_id(user_id: str) -> None:
+    if user_id not in VALID_USER_IDS:
+        raise HTTPException(status_code=400, detail="Invalid user_id. Valid values: p01-p16.")
+
+#  App startup / shutdown 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     gpu = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU"
-    print(f"\n{'='*50}")
-    print(f"  MindfulMomentum Backend v2 — Starting up")
+
+    print(f"  MindfulMomentum Backend is Starting")
     print(f"  Device : {gpu}")
     print(f"  Time   : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"{'='*50}\n")
 
-    # Pre-warm both NLP models so the first API request is instant
-    print("[Startup] Pre-loading RoBERTa sentiment model...")
+    # preloading both NLP models so the first API request is instant
+    print("Pre-loading RoBERTa sentiment model")
     _get_sentiment_pipe()
-    print("[Startup] Pre-loading Sentence-BERT model...")
+    print("Pre-loading Sentence-BERT model")
     _get_sbert()
-    print("[Startup] All models ready.\n")
+    print("All models are ready.\n")
 
     yield
-    print("\n[Server] Shutting down.")
+    print("\nShutting down.")
 
 
 app = FastAPI(
@@ -57,7 +64,7 @@ app.add_middleware(
 )
 
 
-# ─── Request / Response models ─────────────────────────────────────────────────
+#  Request / Response models
 
 class JournalEntry(BaseModel):
     text: str
@@ -73,13 +80,13 @@ class JournalEntry(BaseModel):
         return v
 
 
-# ─── Endpoints ─────────────────────────────────────────────────────────────────
+#  Endpoints
 
 @app.get("/api/health")
 def health_check():
     """
-    Lightweight health check — the mobile app pings this every 30 seconds
-    to show the connection status banner.
+    The mobile app pings this every 30 seconds
+    to show the connection status.
     """
     cuda_available = torch.cuda.is_available()
     return {
@@ -96,7 +103,7 @@ def health_check():
 
 
 @app.post("/api/analyze-journal")
-def process_journal(entry: JournalEntry, background_tasks: BackgroundTasks):
+def process_journal(entry: JournalEntry):
     """
     Run RoBERTa NLP pipeline on a journal entry.
     Returns emotion probabilities, mood score, semantic themes, and paragraph breakdown.
@@ -121,9 +128,7 @@ def process_insight(user_id: str, background_tasks: BackgroundTasks):
     Return N-of-1 ML insight for a user.
     Serves cached result instantly; queues background retrain if model is stale.
     """
-    valid = [f"p{i:02d}" for i in range(1, 17)]
-    if user_id not in valid:
-        raise HTTPException(status_code=400, detail=f"Invalid user_id. Valid: p01–p16.")
+    _ensure_valid_user_id(user_id)
 
     result = generate_personalized_insight(user_id)
 
@@ -142,6 +147,8 @@ def model_info(user_id: str):
     Return cached model metadata (algorithm, F1, training date, days used).
     Used by the app's Model Info Card on the Insights screen.
     """
+    _ensure_valid_user_id(user_id)
+
     info = get_model_info(user_id)
     if info is None:
         raise HTTPException(
@@ -156,9 +163,7 @@ def force_retrain(user_id: str, background_tasks: BackgroundTasks):
     """
     Force-retrain the model for a user (runs in background, returns immediately).
     """
-    valid = [f"p{i:02d}" for i in range(1, 17)]
-    if user_id not in valid:
-        raise HTTPException(status_code=400, detail="Invalid user_id.")
+    _ensure_valid_user_id(user_id)
 
     background_tasks.add_task(generate_personalized_insight, user_id, True)
     return {
@@ -167,7 +172,7 @@ def force_retrain(user_id: str, background_tasks: BackgroundTasks):
     }
 
 
-# ─── Dev runner ────────────────────────────────────────────────────────────────
+#  Dev runner 
 
 if __name__ == "__main__":
     import uvicorn

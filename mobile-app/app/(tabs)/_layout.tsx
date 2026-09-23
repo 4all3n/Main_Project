@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { Platform, StyleSheet, View, Text } from 'react-native';
+import { View, Text } from 'react-native';
 import { useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context'; // <-- NEW: Handles the Device Pill
 import { useAppTheme } from '../../providers/app-theme-provider';
@@ -16,7 +16,7 @@ const TAB_ITEMS = [
 import React, { useEffect, useState } from 'react';
 import { API_BASE_URL } from '../../lib/api';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { TouchableOpacity, Animated } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 
 const ServerHealthPill = () => {
     const { isDark, theme } = useAppTheme();
@@ -185,5 +185,3 @@ export default function TabsLayout() {
         </View>
     );
 }
-
-const styles = StyleSheet.create({});

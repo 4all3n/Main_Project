@@ -46,7 +46,7 @@ os.makedirs(SAVED_DIR,  exist_ok=True)
 os.makedirs(GRAPHS_DIR, exist_ok=True)
 
 
-# ─── Feature list (22 features) ──────────────────────────────────────────────
+#  Feature list (22 features) 
 
 WEARABLE_FEATURES = [
     "steps", "overall_score", "deep_sleep_in_minutes",
@@ -66,7 +66,7 @@ LAG_FEATURES = [
 ALL_FEATURES = WEARABLE_FEATURES + WELLNESS_FEATURES + LAG_FEATURES
 
 
-# ─── N-of-1 model loader ─────────────────────────────────────────────────────
+#  N-of-1 model loader 
 
 def _load_best_params(user_id: str) -> dict | None:
     """Load Optuna best params from research/results/best_params_<user_id>.json"""
@@ -119,11 +119,11 @@ def _build_model(user_id: str) -> tuple:
     return LGBMClassifier(random_state=42, verbose=-1), "LightGBM"
 
 
-# ─── Data loading & feature engineering ──────────────────────────────────────
+#  Data loading & feature engineering 
 
 def _load_and_engineer(user_id: str) -> pd.DataFrame | None:
     """
-    Load all data sources and engineer the full 22+ feature set.
+    Load all data sources and engineer the full 22 feature set.
     Returns a sorted, merged DataFrame or None on failure.
     """
     user_dir = os.path.join(DATA_DIR, user_id)
@@ -136,14 +136,14 @@ def _load_and_engineer(user_id: str) -> pd.DataFrame | None:
         print(f"[ML] Missing data for {user_id}: {e}")
         return None
 
-    # ── Date alignment ────────────────────────────────────────────────────────
+    #  Date alignment 
     wellness_df["Date"] = pd.to_datetime(wellness_df["effective_time_frame"]).dt.date
     sleep_df["Date"]    = pd.to_datetime(sleep_df["timestamp"]).dt.date
     steps_df["Date"]    = pd.to_datetime(steps_df["dateTime"]).dt.date
     steps_df["steps"]   = steps_df["value"].astype(int)
     daily_steps         = steps_df.groupby("Date")["steps"].sum().reset_index()
 
-    # ── Optional Fitbit enrichment ────────────────────────────────────────────
+    #  Optional Fitbit enrichment 
     def _load_json_metric(filename: str, value_col: str = "value") -> pd.DataFrame | None:
         path = os.path.join(user_dir, "fitbit", filename)
         if not os.path.exists(path):
@@ -170,7 +170,7 @@ def _load_and_engineer(user_id: str) -> pd.DataFrame | None:
         except Exception:
             return None
 
-    # ── Merge core tables ─────────────────────────────────────────────────────
+    #  Merge core tables 
     df = pd.merge(wellness_df, sleep_df,    on="Date", how="inner")
     df = pd.merge(df,          daily_steps, on="Date", how="inner")
 
@@ -203,7 +203,7 @@ def _load_and_engineer(user_id: str) -> pd.DataFrame | None:
 
     df = df.sort_values("Date").reset_index(drop=True)
 
-    # ── Wellness feature normalisation ────────────────────────────────────────
+    #  Wellness feature normalisation
     for col in ["fatigue", "stress", "readiness", "sleep_quality"]:
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
@@ -213,7 +213,7 @@ def _load_and_engineer(user_id: str) -> pd.DataFrame | None:
     elif "sleep_duration_h" not in df.columns:
         df["sleep_duration_h"] = np.nan
 
-    # ── Lag features ──────────────────────────────────────────────────────────
+    #  Lag features 
     df["sleep_score_yesterday"] = df["overall_score"].shift(1)
     df["steps_yesterday"]       = df["steps"].shift(1)
     df["sleep_3d_avg"]          = df["overall_score"].rolling(3).mean()
@@ -224,7 +224,7 @@ def _load_and_engineer(user_id: str) -> pd.DataFrame | None:
 
     df = df.bfill().ffill()
 
-    # ── 3-class mood target ───────────────────────────────────────────────────
+    #  3-class mood target 
     df["mood_class"] = df["mood"].apply(
         lambda x: "Low" if x <= 2 else ("High" if x >= 4 else "Normal")
     )
@@ -232,7 +232,7 @@ def _load_and_engineer(user_id: str) -> pd.DataFrame | None:
     return df
 
 
-# ─── Training ─────────────────────────────────────────────────────────────────
+#  Training
 
 def _train_and_save(df: pd.DataFrame, user_id: str) -> dict:
     """
@@ -325,7 +325,7 @@ def _save_importance_chart(user_id: str, features: list, importances: list):
         print(f"[ML] Chart error for {user_id}: {e}")
 
 
-# ─── Staleness check ─────────────────────────────────────────────────────────
+#  Staleness check 
 
 def _model_is_stale(user_id: str, max_age_days: int = 7) -> bool:
     meta_path = os.path.join(SAVED_DIR, f"{user_id}_meta.json")
@@ -340,7 +340,7 @@ def _model_is_stale(user_id: str, max_age_days: int = 7) -> bool:
         return True
 
 
-# ─── Public API ──────────────────────────────────────────────────────────────
+#  Public API ─
 
 def get_model_info(user_id: str) -> dict | None:
     """Return stored model metadata for /api/model-info endpoint."""

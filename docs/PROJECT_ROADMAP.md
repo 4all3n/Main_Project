@@ -526,6 +526,7 @@ async def process_insight(user_id: str, background_tasks: BackgroundTasks):
 - [ ] Input validation on `POST /api/analyze-journal`
 - [ ] Model metadata JSON saved per user
 - [ ] Async inference with `asyncio.to_thread`
+- [ ] `mindful_ml.py` — switch from single-fold F1 to proper 3-fold cross-validated mean F1 (currently trains/evaluates on only the last TimeSeriesSplit fold; paper describes full CV averaging)
 
 ---
 

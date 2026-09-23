@@ -1,7 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { ActivityIndicator, ScrollView, StyleSheet, View, RefreshControl, Pressable } from 'react-native';
-import { Card, Chip, Surface, Text, useTheme, TouchableRipple } from 'react-native-paper';
-import { useRouter } from 'expo-router';
+import { Card, Chip, Surface, Text, useTheme } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppTheme } from '../../providers/app-theme-provider';
 import { EverforestLight, EverforestDark } from '../../constants/theme';
@@ -24,7 +23,6 @@ function InsightCard({
 }) {
     const theme = useTheme();
     const { isDark } = useAppTheme();
-    const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
 
     const ef = isDark ? EverforestDark : EverforestLight;
     return (
@@ -49,11 +47,21 @@ function InsightCard({
     );
 }
 
+function getInsightErrorMessage(message: string): string {
+    const normalized = message.toLowerCase();
+    if (normalized.includes('timed out') || normalized.includes('offline') || normalized.includes('failed to fetch')) {
+        return 'Backend server is offline. Start the backend to load insights.';
+    }
+    if (normalized.includes('not enough data') || normalized.includes('no mood variance')) {
+        return 'Not enough participant data yet. Try a different user or add more records.';
+    }
+    return message || 'Something went wrong while loading insights.';
+}
+
 export default function InsightsScreen() {
     const theme = useTheme();
     const { isDark } = useAppTheme();
     const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
-    const router = useRouter();
     const insets = useSafeAreaInsets();
     const [activeUser, setActiveUser] = useState('p01');
     const [loading, setLoading] = useState(true);
@@ -92,7 +100,8 @@ export default function InsightsScreen() {
                 throw new Error(insightRes.message || 'No insight available right now.');
             }
         } catch (error) {
-            const message = error instanceof Error ? error.message : 'Keep wearing your watch. The insight model needs more data.';
+            const rawMessage = error instanceof Error ? error.message : '';
+            const message = getInsightErrorMessage(rawMessage);
             setErrorMessage(message);
             setTopFeature('--');
             setInsightMessage('--');
@@ -129,7 +138,7 @@ export default function InsightsScreen() {
                         <Text variant="labelLarge" style={{ color: theme.colors.primary, textTransform: 'uppercase', letterSpacing: 1.4 }}>
                             Perspective
                         </Text>
-                        <Pressable onPress={() => setShowResearchMode(!showResearchMode)} style={{ marginTop: 6 }}>
+                        <Pressable onLongPress={() => setShowResearchMode(!showResearchMode)} style={{ marginTop: 6 }}>
                             <Text 
                                 variant="headlineMedium" 
                                 style={{ color: theme.colors.onBackground, fontWeight: '800' }}
@@ -220,7 +229,7 @@ export default function InsightsScreen() {
                         ) : errorMessage ? (
                             <View style={styles.warningCard}>
                                 <Text variant="titleSmall" style={{ color: theme.colors.onSurface, fontWeight: '700' }}>
-                                    Keep wearing your watch
+                                    Insight unavailable right now
                                 </Text>
                                 <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 8, lineHeight: 20 }}>
                                     {errorMessage}

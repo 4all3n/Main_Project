@@ -151,6 +151,9 @@ GoogleService-Info.plist
 # MISC
 # =============================================================================
 
+# Personal interview preparation notes and working explanations
+prepare/
+
 # Test coverage reports
 coverage/
 .coverage
