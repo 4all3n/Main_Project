@@ -6,6 +6,8 @@ import { useAppTheme } from '../../providers/app-theme-provider';
 import { EverforestLight, EverforestDark } from '../../constants/theme';
 import { ZEN_PALETTE } from '../../constants/zen-ui';
 import { MindfulAPI } from '../../services/mindfulApi';
+import { DEFAULT_USER_ID } from '../../constants/app-config';
+import { ModelInfoResponse } from '../../types';
 import React, { useCallback, useEffect, useState } from 'react';
 
 const DEMO_USERS = Array.from({ length: 16 }, (_, index) => `p${String(index + 1).padStart(2, '0')}`);
@@ -63,7 +65,7 @@ export default function InsightsScreen() {
     const { isDark } = useAppTheme();
     const palette = isDark ? ZEN_PALETTE.dark : ZEN_PALETTE.light;
     const insets = useSafeAreaInsets();
-    const [activeUser, setActiveUser] = useState('p01');
+    const [activeUser, setActiveUser] = useState(DEFAULT_USER_ID);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -74,7 +76,7 @@ export default function InsightsScreen() {
     const [dataDaysUsed, setDataDaysUsed] = useState<number | null>(null);
     const [latestFeatureValues, setLatestFeatureValues] = useState<{ key: string; value: number }[]>([]);
     const [featureImportances, setFeatureImportances] = useState<{ feature: string; impact_percent: number }[]>([]);
-    const [modelInfo, setModelInfo] = useState<any>(null);
+    const [modelInfo, setModelInfo] = useState<ModelInfoResponse | null>(null);
 
     const loadData = useCallback(async (isRefresh = false) => {
         if (!isRefresh) setLoading(true);

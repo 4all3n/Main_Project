@@ -14,9 +14,15 @@ export default function SettingsScreen() {
     
     const [apiUrl, setApiUrl] = useState(API_BASE_URL);
 
+    React.useEffect(() => {
+        AsyncStorage.getItem('@backend_url').then((stored) => {
+            if (stored) setApiUrl(stored);
+        });
+    }, []);
+
     const handleSaveUrl = async () => {
-        updateApiUrl(apiUrl);
-        // show some toast or alert in a real app
+        await updateApiUrl(apiUrl);
+        alert(`Backend URL saved:\n${apiUrl}`);
     };
 
     const handleClearData = async () => {

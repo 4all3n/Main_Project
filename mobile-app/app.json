@@ -8,8 +8,13 @@
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#09090b",
     "primaryColor": "#5DE4C7",
+    "icon": "./assets/images/icon.png",
     "android": {
       "package": "com.hpsin.healthdash",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
+        "backgroundColor": "#232A2E"
+      },
       "permissions": [
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_HEART_RATE",

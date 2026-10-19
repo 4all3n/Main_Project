@@ -131,7 +131,7 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
                         accessibilityRole="button"
                         accessibilityState={isFocused ? { selected: true } : {}}
                         accessibilityLabel={options.tabBarAccessibilityLabel}
-                        testID={options.tabBarTestID}
+                        testID={(options as any).tabBarButtonTestID || (options as any).tabBarTestID}
                         onPress={onPress}
                         style={{
                             flex: 1,
@@ -162,7 +162,7 @@ export default function TabsLayout() {
     return (
         <View style={{ flex: 1 }}>
             <Tabs
-                tabBar={props => <CustomTabBar {...props} />}
+                tabBar={props => <CustomTabBar {...(props as any)} />}
                 screenOptions={{
                     headerShown: false,
                 }}

@@ -1,20 +1,46 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 declare const process: {
   env?: Record<string, string | undefined>;
 } | undefined;
 
-const DEFAULT_API_BASE_URL = 'http://localhost:8000'; // Using ADB Reverse port forwarding
+export const BACKEND_URL_STORAGE_KEY = '@backend_url';
+export const DEFAULT_API_BASE_URL =
+  process?.env?.EXPO_PUBLIC_API_BASE_URL?.trim() || 'http://10.47.120.152:8000';
 
-export let API_BASE_URL =
-  process?.env?.EXPO_PUBLIC_API_BASE_URL?.trim() || DEFAULT_API_BASE_URL;
+export let API_BASE_URL = DEFAULT_API_BASE_URL;
 
-export function updateApiUrl(url: string) {
-    API_BASE_URL = url;
+// Load saved custom URL on launch
+AsyncStorage.getItem(BACKEND_URL_STORAGE_KEY)
+  .then((stored) => {
+    if (stored && stored.trim()) {
+      API_BASE_URL = stored.trim().replace(/\/+$/, '');
+    }
+  })
+  .catch(() => {});
+
+export async function updateApiUrl(url: string) {
+  const clean = url.trim().replace(/\/+$/, '');
+  API_BASE_URL = clean;
+  try {
+    await AsyncStorage.setItem(BACKEND_URL_STORAGE_KEY, clean);
+  } catch (e) {
+    console.error('Failed to save backend URL to AsyncStorage:', e);
+  }
 }
 
 export type JournalAnalysisResponse = {
   status: 'success' | 'error';
   calculated_mood_score?: number;
+  emotions?: {
+    joy: number;
+    neutral: number;
+    sadness: number;
+  };
   overall_themes?: string[];
+  semantic_themes?: string[];
+  confidence?: number;
+  latency_ms?: number;
   paragraph_breakdown?: unknown[];
   message?: string;
 };
@@ -41,12 +67,24 @@ export type InsightResponse =
       message: string;
     };
 
+export async function getApiBaseUrl(): Promise<string> {
+  try {
+    const stored = await AsyncStorage.getItem(BACKEND_URL_STORAGE_KEY);
+    if (stored && stored.trim()) {
+      API_BASE_URL = stored.trim().replace(/\/+$/, '');
+      return API_BASE_URL;
+    }
+  } catch {}
+  return API_BASE_URL || DEFAULT_API_BASE_URL;
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const baseUrl = await getApiBaseUrl();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 30000); // Increased from 8s to 30s
 
   try {
-    const response = await fetch(`${API_BASE_URL}${path}`, {
+    const response = await fetch(`${baseUrl}${path}`, {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',

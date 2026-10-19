@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
-import { configureFonts, MD3DarkTheme, MD3LightTheme, Theme } from 'react-native-paper';
+import { configureFonts, MD3DarkTheme, MD3LightTheme, MD3Theme } from 'react-native-paper';
 import { EverforestLight, EverforestDark } from '../constants/theme';
 
 type ThemeMode = 'light' | 'dark';
@@ -9,7 +9,7 @@ type ThemeMode = 'light' | 'dark';
 type AppThemeContextValue = {
   mode: ThemeMode;
   isDark: boolean;
-  theme: Theme;
+  theme: MD3Theme;
   toggleTheme: () => void;
 };
 
@@ -59,7 +59,7 @@ const fontConfig = configureFonts({
   isV3: true,
 });
 
-const lightZenTheme: Theme = {
+const lightZenTheme: MD3Theme = {
   ...MD3LightTheme,
   colors: {
     ...MD3LightTheme.colors,
@@ -87,7 +87,7 @@ const lightZenTheme: Theme = {
   fonts: fontConfig,
 };
 
-const darkZenTheme: Theme = {
+const darkZenTheme: MD3Theme = {
   ...MD3DarkTheme,
   colors: {
     ...MD3DarkTheme.colors,

@@ -9,7 +9,7 @@ function AppLayoutContent() {
 
   return (
     <PaperProvider theme={theme}>
-      <StatusBar style={isDark ? 'light' : 'dark'} translucent />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: theme.colors.background }
